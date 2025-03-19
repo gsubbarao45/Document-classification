@@ -1,3 +1,67 @@
+
+import torch
+import PyPDF2
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Function to extract text from a PDF file
+def extract_text_from_pdf(pdf_path):
+    text = ""
+    with open(pdf_path, "rb") as file:
+        pdf_reader = PyPDF2.PdfReader(file)
+        for page in pdf_reader.pages:
+            if page.extract_text():
+                text += page.extract_text() + "\n"
+    return text.strip()
+
+# Load a **lightweight open-source model**
+MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.1"  # Replace with "gpt2" for even lighter model
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Load model and tokenizer
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.float16, device_map="auto").to(device)
+
+# Function to generate question and answer
+def generate_qa(text, max_length=150, temperature=0.7):
+    input_prompt = f"Generate a question and answer from this text:\n{text}"
+    input_ids = tokenizer(input_prompt, return_tensors="pt").input_ids.to(device)
+
+    # Generate text
+    output_ids = model.generate(
+        input_ids, max_length=max_length, temperature=temperature, do_sample=True
+    )
+
+    output_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+
+    # Extract question and answer
+    if "Q:" in output_text and "A:" in output_text:
+        qa_parts = output_text.split("Q:", 1)[-1].split("A:")
+        question = "Q: " + qa_parts[0].strip()
+        answer = "A: " + qa_parts[1].strip() if len(qa_parts) > 1 else "A: Not available"
+    else:
+        question = f"Q: {text[:100]}?"
+        answer = output_text
+
+    return {"question": question, "answer": answer}
+
+# Test with a PDF file
+pdf_path = "your_pdf_file.pdf"  # Replace with your actual PDF file path
+pdf_text = extract_text_from_pdf(pdf_path)
+
+# Generate Q&A only if text is extracted
+if pdf_text:
+    qa_result = generate_qa(pdf_text[:1000])  # Limit input length for efficiency
+    print(qa_result)
+else:
+    print({"error": "No text extracted from the PDF."})
+
+
+
+
+
+
+
+
 File: LLM_Model_vs_HF_Comparison.xlsx  
 BU Saving?: Yes  
 Functional Area: AI/ML - Question Generation  
