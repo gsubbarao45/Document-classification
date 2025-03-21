@@ -1,3 +1,25 @@
+import pandas as pd
+
+# Load your Excel file
+df = pd.read_excel('your_file.xlsx', sheet_name='Sheet1')
+
+# Select every 3rd row starting from the first (i.e., index 0, 3, 6, ...)
+selected_rows = df.iloc[::3]
+
+# Display selected questions and answers
+for index, row in selected_rows.iterrows():
+    print(f"--- Question {index + 1} ---")
+    print(f"Original Question: {row['Original Question']}")
+    print(f"Original Answer: {row['Original Answer']}")
+    print(f"Diverse Question: {row['Diverse Question']}")
+    print(f"Diverse Answer: {row['Diverse Answer']}")
+    print("\n")
+
+
+
+
+
+
 
 import asyncio
 import uuid
