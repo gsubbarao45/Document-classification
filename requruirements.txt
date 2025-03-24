@@ -3,6 +3,101 @@ from langchain.prompts import PromptTemplate
 import time
 import json
 import os
+import pandas as pd
+
+# Prompt template
+prompt_text = """
+You are a data generator for chatbot training.
+
+The chatbot is designed to handle user queries related to banking and finance.
+
+Your task is to generate {num_questions} natural, unrelated user questions (negative samples) that are:
+- Not related to banking, finance, money, loans, or customer support
+- Varied in topic: food, travel, entertainment, science, sports, education, etc.
+- Realistic and natural sounding
+
+For each question, use the following JSON format:
+
+[
+  {"question_type": "negative", "question": "What’s the weather like in Paris today?", "answer": "I'm not aware of that."},
+  {"question_type": "negative", "question": "How do I cook fried rice?", "answer": "I'm not aware of that."}
+]
+
+Only return a clean JSON array with no extra text, numbers, or explanations.
+"""
+
+# Setup prompt and chain
+prompt_template = PromptTemplate(template=prompt_text, input_variables=["num_questions"])
+llm_chain = LLMChain(llm=llm, prompt=prompt_template)  # make sure `llm` is initialized
+
+# Output paths
+json_file_path = "unrelated_questions.json"
+excel_file_path = "unrelated_questions.xlsx"
+
+# Initialize JSON file if it doesn't exist
+if not os.path.exists(json_file_path):
+    with open(json_file_path, "w") as f:
+        json.dump([], f)
+
+# Function to generate and save questions
+def generate_questions(batch_size, total_questions):
+    total_batches = total_questions // batch_size
+
+    for i in range(total_batches):
+        print(f"Generating batch {i + 1} of {total_batches}...")
+
+        try:
+            response_text = llm_chain.predict(num_questions=str(batch_size))
+            parsed_data = json.loads(response_text)
+
+            # Read existing data
+            with open(json_file_path, "r") as f:
+                existing_data = json.load(f)
+
+            # Append new data
+            existing_data.extend(parsed_data)
+
+            # Save updated JSON
+            with open(json_file_path, "w") as f:
+                json.dump(existing_data, f, indent=2)
+
+            print(f"Batch {i + 1} saved. Total questions so far: {len(existing_data)}")
+
+        except ValueError as ve:
+            print(f"[ERROR] Azure content filter triggered in batch {i + 1}: {ve}")
+            continue
+        except Exception as e:
+            print(f"[ERROR] Failed to process batch {i + 1}: {e}")
+            continue
+
+        time.sleep(2)
+
+# Parameters
+batch_size = 200
+total_questions = 5000
+
+# Generate questions
+generate_questions(batch_size, total_questions)
+
+# Convert final JSON to Excel
+with open(json_file_path, "r") as f:
+    data = json.load(f)
+
+df = pd.DataFrame(data)
+df.to_excel(excel_file_path, index=False)
+print(f"All responses saved to Excel at {excel_file_path}")
+
+
+
+
+
+
+
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+import time
+import json
+import os
 
 # Define prompt
 prompt_text = """
