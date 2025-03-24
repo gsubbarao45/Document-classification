@@ -1,3 +1,8 @@
+Hiji,
+I have kept all the prompts in the given location. In each document, after the prompt, I have mentioned the issues fixed in the particular prompt box:
+
+
+
 ### Fixes Implemented in Updated Prompts:
 
 **Outcome:**
