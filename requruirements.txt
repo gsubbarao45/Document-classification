@@ -1,5 +1,124 @@
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
+import pandas as pd
+import time
+import json
+import os
+
+# List of rotating topics to add variety
+topic_list = [
+    "food", "travel", "entertainment", "sports", "technology", "science",
+    "education", "fashion", "weather", "movies", "music", "books",
+    "history", "geography", "fitness", "cooking", "transport", "lifestyle",
+    "language", "art", "animals", "plants", "tourism", "health", "games"
+]
+
+# Prompt with topic placeholder
+prompt_text = """
+You are a data generator for chatbot training.
+
+The chatbot is designed to handle user queries related to banking and finance.
+
+Your task is to generate {num_questions} natural, unrelated user questions (negative samples) that are:
+- Not related to banking, finance, money, loans, or customer support
+- Related to the general topic of "{extra_topic}" — but must be unrelated to banking
+- Realistic and natural sounding
+
+Use this JSON format only:
+
+[
+  {"question_type": "negative", "question": "What's the capital of Spain?", "answer": "I'm not aware of that."},
+  ...
+]
+
+Only return a clean JSON array. Do not include explanations or formatting.
+"""
+
+# Output paths
+json_file_path = "unrelated_questions.json"
+excel_file_path = "unrelated_questions.xlsx"
+
+# Initialize JSON file if not exists
+if not os.path.exists(json_file_path):
+    with open(json_file_path, "w") as f:
+        json.dump([], f)
+
+# Function to generate unique questions
+def generate_questions(batch_size, total_questions):
+    questions_set = set()
+    questions_list = []
+    topic_index = 0
+    attempts = 0
+    max_attempts = total_questions * 2
+
+    while len(questions_list) < total_questions and attempts < max_attempts:
+        topic = topic_list[topic_index % len(topic_list)]
+        topic_index += 1
+
+        # Customize the prompt with the current topic
+        custom_prompt = prompt_text.replace("{extra_topic}", topic)
+        temp_template = PromptTemplate(template=custom_prompt, input_variables=["num_questions"])
+        temp_chain = LLMChain(llm=llm, prompt=temp_template)
+
+        try:
+            print(f"Generating batch for topic: {topic} | Total so far: {len(questions_list)}")
+            response_text = temp_chain.predict(num_questions=str(batch_size))
+            parsed_data = json.loads(response_text)
+
+            for item in parsed_data:
+                q = item.get("question", "").strip()
+                a = item.get("answer", "I'm not aware of that.").strip()
+                q_type = item.get("question_type", "negative").strip()
+
+                if q and q not in questions_set:
+                    questions_set.add(q)
+                    questions_list.append({
+                        "question": q,
+                        "question_type": q_type,
+                        "answer": a
+                    })
+
+                if len(questions_list) >= total_questions:
+                    break
+
+        except Exception as e:
+            print(f"[ERROR] Failed batch due to: {e}")
+            continue
+
+        time.sleep(1)
+        attempts += 1
+
+    return questions_list
+
+# Parameters
+batch_size = 100
+total_questions = 6000
+
+# Generate and save questions
+data = generate_questions(batch_size, total_questions)
+
+# Save to JSON
+with open(json_file_path, "w") as f:
+    json.dump(data, f, indent=2)
+print(f"Saved {len(data)} unique questions to {json_file_path}")
+
+# Save to Excel
+df = pd.DataFrame(data)
+df.to_excel(excel_file_path, index=False)
+print(f"Also saved to Excel at {excel_file_path}")
+
+
+
+
+
+
+
+
+
+
+
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 import time
 import json
 import os
