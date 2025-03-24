@@ -1,3 +1,20 @@
+Prompt Template:
+You are a data generator for chatbot training.
+The chatbot you're supporting is in the banking domain.
+Your task is to generate unrelated (negative) user questions that are:
+
+Not related to banking, finance, money, loans, or customer support
+
+Varied across domains like entertainment, sports, food, travel, lifestyle, science, general knowledge, etc.
+
+Natural and realistic as if a real user typed them
+
+Suitable for training a chatbot to recognize out-of-domain input
+
+
+
+
+
 import pandas as pd
 
 # Load your Excel file
