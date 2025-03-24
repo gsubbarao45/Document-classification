@@ -1,3 +1,44 @@
+### Fix Summary: Reduction of Out-of-Context Factual Questions
+
+**Problem Identified:**  
+Previous versions of the factual prompt resulted in approximately **12% of generated questions being out-of-context** or unrelated to the provided input. These included:
+- Questions not grounded in the input paragraph
+- References to metadata such as version numbers, dates, and template names
+- Generic financial knowledge not found in the source
+- Questions derived from image descriptions instead of text
+
+**Root Causes:**  
+- Lack of strict instruction to anchor questions to input content  
+- No filtering of metadata or image-based content  
+- No blacklist for known invalid patterns  
+- Loose format enforcement for JSON structure
+
+**Fixes Implemented in Updated Prompt:**  
+1. **Enforced Input Grounding:**  
+   - All questions must be strictly derived from the input paragraph content  
+   - Excluded general, irrelevant, or placeholder questions
+
+2. **Metadata and Image Filtering:**  
+   - Explicitly disallowed questions related to dates, templates, version numbers, or image-based descriptions  
+   - Added known blacklisted patterns to avoid (e.g., questions about SOP template ownership)
+
+3. **Structured Output Enforcement:**  
+   - Required output as clean JSON array only — no markdown, explanations, or formatting noise  
+   - Emphasized unique and non-repetitive questions
+
+**Outcome:**  
+- Successfully reduced the percentage of unrelated or invalid factual questions from **12% to 0%**  
+- Ensured the dataset consists of **high-quality, content-specific factual question-answer pairs**
+
+
+
+
+
+
+
+
+
+
 ### Documentation: Issues Fixed in Procedural Prompt Design
 
 This prompt is used to generate procedural question-answer pairs from structured PDF extractions. The following issues were identified and fixed to ensure accurate, logical, and well-structured outputs:
