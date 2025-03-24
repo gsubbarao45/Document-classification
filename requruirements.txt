@@ -1,3 +1,81 @@
+prompt_text = """
+You are a data generator for chatbot training.
+
+The chatbot is designed to handle user queries related to banking and finance.
+
+Your task is to generate {num_questions} natural, unrelated user questions (negative samples) that are:
+- Not related to banking, finance, money, loans, or customer support
+- Varied in topic: food, travel, entertainment, science, sports, education, etc.
+- Realistic and natural sounding
+
+Output the questions in this JSON format ONLY:
+
+[
+  {"question_type": "negative", "question": "What’s the weather like in Paris today?"},
+  {"question_type": "negative", "question": "How do I cook fried rice?"},
+  ...
+]
+Only return a clean JSON array with no extra text, numbers, or explanations.
+"""
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+import pandas as pd
+import time
+import json
+
+# Setup the prompt
+prompt_template = PromptTemplate(template=prompt_text, input_variables=["num_questions"])
+
+# Set up LLMChain
+llm_chain = LLMChain(llm=llm, prompt=prompt_template)  # assuming llm is your AzureChatOpenAI instance
+
+# Function to generate questions in batches
+def generate_questions(batch_size, total_questions):
+    questions_list = []
+
+    for i in range(total_questions // batch_size):
+        print(f"Generating batch {i + 1} of {total_questions // batch_size}...")
+
+        response_text = llm_chain.predict(num_questions=str(batch_size))
+
+        # Ensure response is valid JSON
+        try:
+            parsed_data = json.loads(response_text)
+            for item in parsed_data:
+                question = item.get("question", "").strip()
+                qtype = item.get("question_type", "negative").strip()
+                questions_list.append([question, qtype])
+        except Exception as e:
+            print(f"Failed to parse JSON batch {i + 1}: {e}")
+            continue
+
+        time.sleep(2)  # to handle API rate limits
+
+    return questions_list
+
+# Example: Generate 2000 unrelated questions in batches of 200
+batch_size = 200
+total_questions = 2000
+
+questions_data = generate_questions(batch_size, total_questions)
+
+# Convert to DataFrame
+df = pd.DataFrame(questions_data, columns=["Question", "Question Type"])
+
+# Save to CSV
+file_path = "unrelated_questions.csv"
+df.to_csv(file_path, index=False)
+print(f"Dataset saved as {file_path} with {len(df)} questions.")
+
+
+
+
+
+
+
+
+
+
 Prompt Template:
 You are a data generator for chatbot training.
 The chatbot you're supporting is in the banking domain.
