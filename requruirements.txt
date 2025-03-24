@@ -1,3 +1,22 @@
+### Fixes Implemented in Updated Prompts:
+
+**Outcome:**
+
+- Successfully reduced the percentage of unrelated or invalid questions across all categories:  
+  - **Factual questions**: Reduced from 5% to **1%**  
+  - **Inferential questions**: Reduced from 5% to **3%**  
+  - **Conceptual questions**: Reduced from 4% to **2%**  
+  - **Reasoning-based questions**: Reduced from 3% to **1%**  
+  - **Procedural questions**: Reduced from 5% to **1%**
+
+- Ensured the dataset consists of **high-quality, contextually relevant, and content-specific question-answer pairs**, aligned with the input content and free from generic, repetitive, or out-of-scope entries.
+
+
+
+
+
+
+
 ### Fix Summary: Reduction of Out-of-Context Factual Questions
 
 **Problem Identified:**  
