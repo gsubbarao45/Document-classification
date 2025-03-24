@@ -1,3 +1,55 @@
+### Documentation: Issues Fixed in Procedural Prompt Design
+
+This prompt is used to generate procedural question-answer pairs from structured PDF extractions. The following issues were identified and fixed to ensure accurate, logical, and well-structured outputs:
+
+---
+
+**1. Enforced Strict Output Format**  
+- Fixed issue where model outputs unstructured or partial JSON.  
+- Added explicit instructions to output a valid JSON list of objects.  
+- Ensured no extra explanation or “json” tags are included in the output.
+
+**2. Structured Answer Format with Rich Details**  
+- Added detailed structure for answers using sections:  
+  - Title of Procedure  
+  - Introduction  
+  - Prerequisites  
+  - Step-by-step Procedure with Step titles  
+- Supports markdown formatting for clarity and consistency.
+
+**3. Integration of Visual Descriptions (Images/Tables/Icons)**  
+- Fixed issue of missing visual reference integration.  
+- Prompt instructs the model to include relevant image/table/icon descriptions in answers using proper markdown formatting and captions.
+
+**4. Sequential Logical Flow of Steps**  
+- Ensures steps are described in proper order with logical flow.  
+- First step starts clearly and each subsequent step builds on it.
+
+**5. Rich Context Preservation**  
+- Ensures no inline description or contextual detail from the input is skipped.  
+- Emphasized integrating notes, labels, field names, and descriptions into the steps.
+
+**6. Elimination of Placeholder or Sample Leakage**  
+- Prevented sample outputs like "Example of procedural answer" from being included in model response.  
+- Clearly marked those as instructional only, not for inclusion in final output.
+
+**7. Dynamic Batch Size Support**  
+- Enabled support for flexible generation using `{num_questions}` input variable.  
+- Allows generation of different batch sizes without prompt modification.
+
+**8. Clarified Input Format**  
+- Explained that input is extracted markdown content from PDFs, containing text, images, tables, screenshots, and icons.  
+- Clarified how to interpret and use this input while generating output.
+
+---
+
+This prompt ensures consistent, complete, and logically ordered procedural content suitable for chatbot training, documentation automation, or workflow generation.
+
+
+
+
+
+
 prompt_text = """
 You are a data generator for chatbot training.
 
