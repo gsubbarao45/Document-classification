@@ -1,3 +1,71 @@
+def generate_questions(batch_size, total_questions):
+    questions_set = set()
+    topic_index = 0
+    attempts = 0
+    max_attempts = total_questions * 2
+
+    # Load existing data if any
+    if os.path.exists(json_file_path):
+        with open(json_file_path, "r") as f:
+            existing_data = json.load(f)
+            for item in existing_data:
+                questions_set.add(item["question"])
+    else:
+        existing_data = []
+
+    while len(existing_data) < total_questions and attempts < max_attempts:
+        topic = topic_list[topic_index % len(topic_list)]
+        topic_index += 1
+
+        # Customize prompt per topic
+        custom_prompt = prompt_text.replace("{extra_topic}", topic)
+        temp_template = PromptTemplate(template=custom_prompt, input_variables=["num_questions"])
+        temp_chain = LLMChain(llm=llm, prompt=temp_template)
+
+        try:
+            print(f"Generating batch for topic: {topic} | Total so far: {len(existing_data)}")
+            response_text = temp_chain.predict(num_questions=str(batch_size))
+            parsed_data = json.loads(response_text)
+
+            new_batch = []
+            for item in parsed_data:
+                q = item.get("question", "").strip()
+                a = item.get("answer", "I'm not aware of that.").strip()
+                q_type = item.get("question_type", "negative").strip()
+
+                if q and q not in questions_set:
+                    questions_set.add(q)
+                    new_batch.append({
+                        "question": q,
+                        "question_type": q_type,
+                        "answer": a
+                    })
+
+                if len(existing_data) + len(new_batch) >= total_questions:
+                    break
+
+            if new_batch:
+                existing_data.extend(new_batch)
+                # Append to JSON file
+                with open(json_file_path, "w") as f:
+                    json.dump(existing_data, f, indent=2)
+                print(f"Appended {len(new_batch)} new questions. Total: {len(existing_data)}")
+
+        except Exception as e:
+            print(f"[ERROR] Batch failed: {e}")
+            continue
+
+        time.sleep(1)
+        attempts += 1
+
+    return existing_data
+
+
+
+
+
+
+
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 import pandas as pd
