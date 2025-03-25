@@ -1,3 +1,34 @@
+prompt_text = """
+You are a data generator for chatbot training.
+
+Your task is to generate {num_questions} unique and natural **greeting-type question-answer pairs** that people commonly use to start conversations.
+
+Requirements:
+- Each question should be a form of greeting or opening message (e.g., "Hi!", "Good morning!", "How are you?")
+- Each answer should be an appropriate and natural response to that greeting.
+- Responses should be friendly, polite, and brief.
+- Avoid banking, finance, or domain-specific content.
+- No duplicate or overly similar questions.
+
+Use this JSON format only:
+
+[
+  {"question_type": "greeting", "question": "Hi!", "answer": "Hello! How can I help you today?"},
+  {"question_type": "greeting", "question": "Good morning!", "answer": "Good morning! Hope you're having a great day!"},
+  ...
+]
+
+Only return a clean JSON array. Do not include explanations, markdown, or extra formatting.
+"""
+
+
+
+
+
+
+
+
+
 def generate_questions(batch_size, total_questions):
     questions_set = set()
     topic_index = 0
