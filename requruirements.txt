@@ -1,3 +1,117 @@
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+import pandas as pd
+import time
+import json
+import os
+
+# Updated Prompt: Greeting-based
+prompt_text = """
+You are a data generator for chatbot training.
+
+Your task is to generate {num_questions} unique and natural **greeting-type question-answer pairs** that people commonly use to start conversations.
+
+Requirements:
+- Each question should be a form of greeting or opening message (e.g., "Hi!", "Good morning!", "How are you?")
+- Each answer should be an appropriate and natural response to that greeting.
+- Responses should be friendly, polite, and brief.
+- Avoid banking, finance, or domain-specific content.
+- No duplicate or overly similar questions.
+
+Use this JSON format only:
+
+[
+  {"question_type": "greeting", "question": "Hi!", "answer": "Hello! How can I help you today?"},
+  {"question_type": "greeting", "question": "Good morning!", "answer": "Good morning! Hope you're having a great day!"},
+  ...
+]
+
+Only return a clean JSON array. Do not include explanations, markdown, or extra formatting.
+"""
+
+# Output paths
+json_file_path = "greeting_questions.json"
+excel_file_path = "greeting_questions.xlsx"
+
+# Initialize JSON file if not exists
+if not os.path.exists(json_file_path):
+    with open(json_file_path, "w") as f:
+        json.dump([], f)
+
+# Function to generate and append unique greetings
+def generate_greeting_questions(batch_size, total_questions):
+    questions_set = set()
+    attempts = 0
+    max_attempts = total_questions * 2
+
+    # Load existing data
+    if os.path.exists(json_file_path):
+        with open(json_file_path, "r") as f:
+            existing_data = json.load(f)
+            for item in existing_data:
+                questions_set.add(item["question"])
+    else:
+        existing_data = []
+
+    while len(existing_data) < total_questions and attempts < max_attempts:
+        temp_template = PromptTemplate(template=prompt_text, input_variables=["num_questions"])
+        temp_chain = LLMChain(llm=llm, prompt=temp_template)
+
+        try:
+            print(f"Generating batch... Total so far: {len(existing_data)}")
+            response_text = temp_chain.predict(num_questions=str(batch_size))
+            parsed_data = json.loads(response_text)
+
+            new_batch = []
+            for item in parsed_data:
+                q = item.get("question", "").strip()
+                a = item.get("answer", "").strip()
+                q_type = item.get("question_type", "greeting").strip()
+
+                if q and q not in questions_set:
+                    questions_set.add(q)
+                    new_batch.append({
+                        "question": q,
+                        "question_type": q_type,
+                        "answer": a
+                    })
+
+                if len(existing_data) + len(new_batch) >= total_questions:
+                    break
+
+            if new_batch:
+                existing_data.extend(new_batch)
+                with open(json_file_path, "w") as f:
+                    json.dump(existing_data, f, indent=2)
+                print(f"Appended {len(new_batch)} new questions. Total: {len(existing_data)}")
+
+        except Exception as e:
+            print(f"[ERROR] Batch failed: {e}")
+            continue
+
+        time.sleep(1)
+        attempts += 1
+
+    return existing_data
+
+# Parameters
+batch_size = 100
+total_questions = 1000  # You can change this number
+
+# Generate data
+data = generate_greeting_questions(batch_size, total_questions)
+
+# Save to Excel
+df = pd.DataFrame(data)
+df.to_excel(excel_file_path, index=False)
+print(f"All greeting questions saved to: {json_file_path} and {excel_file_path}")
+
+
+
+
+
+
+
 prompt_text = """
 You are a data generator for chatbot training.
 
