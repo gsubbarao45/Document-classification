@@ -1,3 +1,28 @@
+“I’m not aware of that information at the moment.”
+
+“I haven’t been trained on that topic yet.”
+
+“That’s outside my current knowledge base.”
+
+“I’m sorry, I don’t have the details on that right now.”
+
+“That information is not available to me at the moment.”
+
+“I currently don’t support queries related to that.”
+
+“I don’t have the training to answer that yet.”
+
+“I wish I could help, but I’m not equipped to handle that.”
+
+“I’m unable to answer that with my current training.”
+
+“That’s something I haven’t learned yet, but I’m improving every day.”
+
+
+
+
+
+
 import pandas as pd
 
 # Load your Excel file
