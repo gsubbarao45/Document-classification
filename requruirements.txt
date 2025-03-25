@@ -1,3 +1,26 @@
+import pandas as pd
+
+# Load your Excel file
+df = pd.read_excel('your_file.xlsx')  # Replace with your actual file name
+
+# Keep only rows where (index % 6) != 5 (0-based index: 0-5 means row 1-6)
+filtered_df = df[[i % 6 != 5 for i in range(len(df))]]
+
+# Save the result to a new Excel file
+filtered_df.to_excel('filtered_file.xlsx', index=False)
+
+print("Filtered file saved as 'filtered_file.xlsx'")
+
+
+
+
+
+
+
+
+
+
+
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 import pandas as pd
