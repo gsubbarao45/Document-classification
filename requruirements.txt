@@ -4,6 +4,92 @@ from pdf2image import convert_from_path
 import base64
 import os
 import concurrent.futures
+
+pdf_path = r"c:\Users\P872643\Downloads\D-02 Cash Note 3.0.pdf"
+output_folder = "pdf_images"
+os.makedirs(output_folder, exist_ok=True)
+
+# Convert PDF to images
+images = convert_from_path(pdf_path, 500, poppler_path=r'C:\Users\P872643\Downloads\poppler-0.68.0\bin')
+
+# AzureChatOpenAI instance
+llm = AzureChatOpenAI(
+    temperature=0,
+    api_version="your_api_version",
+    azure_endpoint="your_azure_endpoint",
+    deployment_name="ssgpt-40",
+    seed=1
+)
+
+def process_page(i, img):
+    try:
+        image_path = os.path.join(output_folder, f"page_{i + 1}.png")
+        img.save(image_path, "PNG")
+        print(f"[INFO] Page {i + 1} saved", flush=True)
+
+        with open(image_path, "rb") as image_file:
+            image_data = base64.b64encode(image_file.read()).decode("utf-8")
+
+        message = HumanMessage(
+            content=[
+                {
+                    "type": "text",
+                    "text": """
+# objective:
+You are an AI assistant that extracts data from documents and returns them as structured markdown method.
+
+#steps to extract the documents
+1. you are provided with the images of the pdf pages, go through that and extract each and every details as it is present in the pdf
+2. make sure that you are extracting the information in the markdown way, with keeping the layout of the pdf images as it is.
+3. make sure you add the images, table, screenshot and text as it is present in the input and also make sure you add the borders, form
+4. write a short inline description for images, screenshot and tables. Inside the description add the information for any data which is
+5. store these image into one folder named as images of type png format and add this images in the markdown way.
+. If the description is for image then, write the description starting with image_description:, similarly you can use this for oth
+Do not return as a code block."""
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
+                }
+            ]
+        )
+
+        response = llm.invoke([message])
+        print(f"[DONE] Page {i + 1} processed", flush=True)
+        return (i, response.content)
+
+    except Exception as e:
+        print(f"[ERROR] Page {i + 1} failed: {str(e)}", flush=True)
+        return (i, f"[ERROR on Page {i + 1}]: {str(e)}")
+
+# Parallel processing
+results = [None] * len(images)
+with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    futures = [executor.submit(process_page, i, img) for i, img in enumerate(images)]
+    for future in concurrent.futures.as_completed(futures):
+        i, content = future.result()
+        results[i] = content  # store in original order
+
+# Combine and print final output
+extract_list = ''.join(results)
+
+print("\n[FINAL OUTPUT]")
+for idx, content in enumerate(results):
+    print(f"\n--- Page {idx + 1} ---\n")
+    print(content)
+
+
+
+
+
+
+
+from langchain_core.messages import HumanMessage
+from langchain_openai import AzureChatOpenAI
+from pdf2image import convert_from_path
+import base64
+import os
+import concurrent.futures
 import sys
 
 pdf_path = r"c:\Users\P872643\Downloads\D-02 Cash Note 3.0.pdf"
