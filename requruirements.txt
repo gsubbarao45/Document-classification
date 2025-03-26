@@ -1,4 +1,81 @@
 import uuid
+from langchain.chat_models import AzureChatOpenAI
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
+
+def make_id():
+    return str(uuid.uuid4())
+
+def convert_to_langchain_messages(openai_messages):
+    converted = []
+    for msg in openai_messages:
+        if msg["role"] == "user":
+            converted.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            converted.append(AIMessage(content=msg["content"]))
+        elif msg["role"] == "system":
+            converted.append(SystemMessage(content=msg["content"]))
+    return converted
+
+class EngineWrapper:
+    def __init__(
+        self,
+        model,
+        api_key=None,
+        base_url=None,
+        api_version="2023-07-01-preview",
+        mode="api"
+    ):
+        self.model = model  # Azure deployment name (e.g., "ssgpt-40")
+        self.api_key = api_key
+        self.base_url = base_url or "https://<your-resource-name>.openai.azure.com/"
+        self.api_version = api_version
+        self.mode = mode
+
+        if self.mode == "api":
+            self.client = AzureChatOpenAI(
+                deployment_name=self.model,
+                openai_api_key=self.api_key,
+                openai_api_base=self.base_url,
+                openai_api_version=self.api_version,
+                openai_api_type="azure",
+                temperature=0.7,
+                max_tokens=3000,
+                streaming=True
+            )
+        else:
+            raise ValueError("Unsupported mode. Only 'api' (AzureChatOpenAI) is supported.")
+
+    async def submit_chat(self, messages, sampling_params):
+        # Use sampling parameters if provided
+        temperature = sampling_params.get("temperature", 0.7)
+        top_p = sampling_params.get("top_p", 1.0)
+        max_tokens = sampling_params.get("max_tokens", 3000)
+
+        # Convert OpenAI-style messages to LangChain format
+        langchain_messages = convert_to_langchain_messages(messages)
+
+        try:
+            response = await self.client.agenerate(
+                [langchain_messages],
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens
+            )
+            output = response.generations[0][0].text
+            return output, False
+        except Exception as e:
+            print("\n---- Exception during generation ----")
+            print(e)
+            return "", True
+
+
+
+
+
+
+
+
+import uuid
 from openai import AzureOpenAI
 from httpx import Timeout
 
