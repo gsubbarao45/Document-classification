@@ -1,5 +1,75 @@
 import uuid
 from langchain_openai import AzureChatOpenAI
+from langchain.chains import LLMChain
+from langchain.prompts import ChatPromptTemplate
+
+def make_id():
+    return str(uuid.uuid4())
+
+class EngineWrapper:
+    def __init__(
+        self,
+        model,
+        api_key=None,
+        azure_endpoint=None,
+        api_version="2023-07-01-preview",
+        mode="api"
+    ):
+        self.model = model  # Azure deployment name (e.g., "ssgpt-40")
+        self.api_key = api_key
+        self.azure_endpoint = azure_endpoint or "https://<your-resource-name>.openai.azure.com/"
+        self.api_version = api_version
+        self.mode = mode
+
+        if self.mode == "api":
+            self.llm = AzureChatOpenAI(
+                azure_deployment=self.model,
+                azure_endpoint=self.azure_endpoint,
+                api_key=self.api_key,
+                api_version=self.api_version,
+                temperature=0.7,
+                max_tokens=2048,
+                streaming=False
+            )
+
+            self.prompt = ChatPromptTemplate.from_messages([
+                ("system", "You are a helpful assistant."),
+                ("human", "{input}")
+            ])
+
+            self.chain = LLMChain(llm=self.llm, prompt=self.prompt)
+        else:
+            raise ValueError("Only 'api' (AzureChatOpenAI) mode is supported.")
+
+    async def submit_chat(self, messages, sampling_params):
+        try:
+            # Assume the last message from user is the real prompt
+            user_prompt = ""
+            for m in messages[::-1]:
+                if m["role"] == "user":
+                    user_prompt = m["content"]
+                    break
+
+            if not user_prompt:
+                raise ValueError("No 'user' role message found.")
+
+            response = await self.chain.apredict(input=user_prompt)
+            return response, False
+
+        except Exception as e:
+            print("\n---- Exception during generation ----")
+            print(e)
+            return "", True
+
+
+
+
+
+
+
+
+import uuid
+from langchain_openai import AzureChatOpenAI
 from langchain.schema import AIMessage, HumanMessage, SystemMessage
 
 def make_id():
