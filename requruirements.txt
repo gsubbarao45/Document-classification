@@ -1,3 +1,111 @@
+import json
+import time
+import pandas as pd
+from openai import AzureChatOpenAI
+
+# Azure LLM config
+azure_openai_endpoint = "https://<your-azure-endpoint>.openai.azure.com"  # Replace with yours
+azure_openai_api_version = "2023-12-01-preview"
+llm = AzureChatOpenAI(
+    temperature=0,
+    api_version=azure_openai_api_version,
+    azure_endpoint=azure_openai_endpoint,
+    deployment_name="ssgpt-40",
+    seed=1
+)
+
+# Build Chain-of-Thought prompt
+def build_prompt(entry):
+    return f"""
+You are validating a diverse synthetic Q&A pair against its original version. Follow the critique steps below and return a JSON output.
+
+Original Question: {entry['Original Question']}
+Original Answer: {entry['Original Answer']}
+
+Diverse Question: {entry['Diverse Question']}
+Diverse Answer: {entry['Diverse Answer']}
+
+---
+
+Steps:
+1. Semantic Alignment:
+   - Does the diverse question preserve the original question’s intent and meaning?
+   - Does the diverse answer match the context and correctness of the original answer?
+
+2. Terminology & Clarity:
+   - Are instructions clear and structured (e.g., headings like ## Introduction)?
+   - Any typos or vague steps?
+
+3. Faithfulness & Accuracy:
+   - Does the diverse answer omit important details or add unrelated content?
+
+4. Final Evaluation:
+   Return the following JSON:
+
+{{
+  "Alignment": "✅/⚠/❌",
+  "Accuracy": "✅/⚠/❌",
+  "Clarity": "✅/⚠/❌",
+  "Comments": "Brief explanation",
+  "Revised_Question": "If needed, else null",
+  "Revised_Answer": "If needed, else null"
+}}
+"""
+
+# Validate one Q&A entry
+def validate_with_llm(entry, retries=3):
+    prompt = build_prompt(entry)
+    for attempt in range(retries):
+        try:
+            response = llm.predict(prompt)
+            return json.loads(response)
+        except Exception as e:
+            print(f"Error (attempt {attempt+1}): {e}")
+            time.sleep(2)
+    return {
+        "Alignment": "Error",
+        "Accuracy": "Error",
+        "Clarity": "Error",
+        "Comments": "LLM call failed.",
+        "Revised_Question": None,
+        "Revised_Answer": None
+    }
+
+# Validate all entries and export to Excel
+def validate_and_export(input_file, output_excel):
+    with open(input_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    rows = []
+    for i, entry in enumerate(data):
+        print(f"Processing {i+1}/{len(data)}...")
+        result = validate_with_llm(entry)
+        rows.append({
+            "Original Question": entry["Original Question"],
+            "Original Answer": entry["Original Answer"],
+            "Diverse Question": entry["Diverse Question"],
+            "Diverse Answer": entry["Diverse Answer"],
+            "Alignment": result.get("Alignment", ""),
+            "Accuracy": result.get("Accuracy", ""),
+            "Clarity": result.get("Clarity", ""),
+            "Comments": result.get("Comments", "")
+        })
+
+    df = pd.DataFrame(rows)
+    df.to_excel(output_excel, index=False)
+    print(f"\nValidation complete. Results saved to: {output_excel}")
+
+# Run validation
+validate_and_export("qa_dataset.json", "validated_output.xlsx")
+
+
+
+
+
+
+
+
+
 from langchain_core.messages import HumanMessage
 from langchain_openai import AzureChatOpenAI
 from pdf2image import convert_from_path
