@@ -1,3 +1,74 @@
+import uuid
+from openai import AzureOpenAI
+from httpx import Timeout
+
+def make_id():
+    return str(uuid.uuid4())
+
+class EngineWrapper:
+    def __init__(
+        self,
+        model,
+        api_key=None,
+        base_url=None,
+        api_version="2023-07-01-preview",
+        mode="api"
+    ):
+        self.model = model  # this should be your Azure deployment name
+        self.api_key = api_key
+        self.base_url = base_url or "https://<your-resource-name>.openai.azure.com/"
+        self.api_version = api_version
+        self.mode = mode
+
+        if mode == "api":
+            self.client = AzureOpenAI(
+                api_key=self.api_key,
+                api_version=self.api_version,
+                azure_endpoint=self.base_url,
+                timeout=Timeout(timeout=60.0, connect=10.0)
+            )
+        else:
+            raise ValueError("Only 'api' mode is supported in this Azure-compatible version.")
+
+    async def submit_chat(self, messages, sampling_params):
+        # Set default sampling values
+        temperature = sampling_params.get("temperature", 1.0)
+        top_p = sampling_params.get("top_p", 1.0)
+        max_tokens = sampling_params.get("max_tokens", 3000)
+        stop = sampling_params.get("stop", [])
+
+        completion = ""
+        timed_out = False
+
+        try:
+            stream = await self.client.chat.completions.create(
+                deployment_id=self.model,  # Important for Azure!
+                messages=messages,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+                stop=stop,
+                stream=True,
+                timeout=60.0
+            )
+
+            async for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    completion += chunk.choices[0].delta.content
+
+        except Exception as e:
+            print("\n\n---- Exception during generation ----")
+            print(e)
+            print("-----/\------")
+            timed_out = True
+
+        return completion, timed_out
+
+
+
+
+
+
 “I’m not aware of that information at the moment.”
 
 “I haven’t been trained on that topic yet.”
