@@ -1,3 +1,92 @@
+import os
+import base64
+from pdf2image import convert_from_path
+from concurrent.futures import ThreadPoolExecutor
+from langchain_openai import AzureChatOpenAI
+from langchain_core.messages import HumanMessage
+
+# Configuration
+pdf_path = r"c:\Users\P872643\Downloads\D-02 Cash Note 3.0.pdf"
+output_folder = "pdf_images"
+poppler_path = r"C:\Users\P872643\Downloads\poppler-0.68.0\bin"
+
+azure_openai_api_version = "2023-07-01-preview"
+azure_openai_endpoint = "<your-endpoint>"  # Replace with your Azure endpoint
+
+# Ensure output folder exists
+os.makedirs(output_folder, exist_ok=True)
+
+# Convert PDF to images at lower DPI (e.g., 300)
+print("Converting PDF pages to images...")
+images = convert_from_path(pdf_path, 300, poppler_path=poppler_path)
+
+# Initialize model
+llm = AzureChatOpenAI(
+    temperature=0,
+    api_version=azure_openai_api_version,
+    azure_endpoint=azure_openai_endpoint,
+    deployment_name="ssgpt-40",
+    seed=1
+)
+
+# Prompt Text
+prompt_text = """
+# objective:
+You are an AI assistant that extracts data from documents and returns them as structured markdown method.
+
+# steps to extract the documents:
+1. You are provided with the images of the PDF pages. Go through them and extract each and every detail as it is present in the PDF.
+2. Make sure you are extracting the information in the markdown way, keeping the layout of the PDF images as it is.
+3. Include images, tables, screenshots, and text as they appear. Preserve borders, forms, and layout.
+4. Write a short inline description for images, screenshots, and tables. Start description with `image_description:` or similar tags.
+5. Store these images in a folder named 'images' in PNG format and reference them in the markdown accordingly.
+Do not return output as a code block.
+"""
+
+# Processing function
+def process_page(index, image):
+    image_path = os.path.join(output_folder, f"page_{index+1}.png")
+    image.save(image_path, "PNG")
+
+    with open(image_path, "rb") as image_file:
+        image_data = base64.b64encode(image_file.read()).decode("utf-8")
+
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": prompt_text},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}}
+        ]
+    )
+
+    try:
+        response = llm.invoke([message])
+        print(f"Processed Page {index+1}")
+        return f"\n--- Page {index+1} ---\n{response.content}"
+    except Exception as e:
+        print(f"Error on page {index+1}: {e}")
+        return f"\n--- Page {index+1} ---\nError: {e}"
+
+# Multithreaded execution
+print("Starting multithreaded processing...")
+extract_list = []
+with ThreadPoolExecutor() as executor:
+    results = list(executor.map(lambda x: process_page(*x), enumerate(images)))
+    extract_list.extend(results)
+
+# Save the extracted result
+output_markdown_path = "extracted_output.md"
+with open(output_markdown_path, "w", encoding="utf-8") as f:
+    f.write("\n\n".join(extract_list))
+
+print(f"\nExtraction complete. Markdown saved to: {output_markdown_path}")
+
+
+
+
+
+
+
+
 import uuid
 from langchain_openai import AzureChatOpenAI
 from langchain.chains import LLMChain
