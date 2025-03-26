@@ -1,3 +1,134 @@
+import pandas as pd
+import json
+import time
+from openai import AzureChatOpenAI
+
+# ====== Azure LLM Config ======
+azure_openai_endpoint = "https://<your-endpoint>.openai.azure.com"  # Replace
+azure_openai_api_version = "2023-12-01-preview"
+llm = AzureChatOpenAI(
+    temperature=0,
+    api_version=azure_openai_api_version,
+    azure_endpoint=azure_openai_endpoint,
+    deployment_name="ssgpt-40",
+    seed=1
+)
+
+# ====== Step 1: Convert Excel to JSON ======
+def convert_excel_to_json(file_path: str, output_json_path: str = "output_data.json") -> str:
+    df = pd.read_excel(file_path, dtype=str).fillna("")
+    json_data = []
+    for _, row in df.iterrows():
+        json_data.append({
+            "Question_type": row.get("Question Type", ""),
+            "Original Question": row.get("Original Question", ""),
+            "Original Answer": row.get("Original Answer", ""),
+            "Diverse Question": row.get("Diverse Question", ""),
+            "Diverse Answer": row.get("Diverse Answer", ""),
+            "Source File": row.get("Source File", "")
+        })
+    with open(output_json_path, "w", encoding="utf-8") as json_file:
+        json.dump(json_data, json_file, indent=4, ensure_ascii=False)
+    print(f"Data successfully converted to JSON and saved to {output_json_path}")
+    return output_json_path
+
+# ====== Step 2: Read JSON File ======
+def read_json_file(file_path: str) -> list:
+    try:
+        with open(file_path, "r", encoding="utf-8") as json_file:
+            data = json.load(json_file)
+        print(f"Successfully read {len(data)} records from {file_path}")
+        return data
+    except FileNotFoundError:
+        print(f"Error: File not found at {file_path}")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+    return []
+
+# ====== Step 3: Build CoT Prompt ======
+def build_prompt(entry):
+    return f"""
+You are validating a diverse synthetic Q&A pair against its original version. Follow the critique steps below and return a JSON output.
+
+Original Question: {entry['Original Question']}
+Original Answer: {entry['Original Answer']}
+
+Diverse Question: {entry['Diverse Question']}
+Diverse Answer: {entry['Diverse Answer']}
+
+Steps:
+1. Semantic Alignment: Does the diverse question preserve the original intent? Does the answer match the same correctness and context?
+2. Terminology & Clarity: Any typos? Is it step-by-step and structured (e.g., ## Introduction)?
+3. Faithfulness: Does the answer miss important steps or add incorrect info?
+
+Return:
+{{
+  "Alignment": "✅/⚠/❌",
+  "Accuracy": "✅/⚠/❌",
+  "Clarity": "✅/⚠/❌",
+  "Comments": "Short explanation",
+  "Revised_Question": "If needed, else null",
+  "Revised_Answer": "If needed, else null"
+}}
+"""
+
+# ====== Step 4: Validate Entry via Azure LLM ======
+def validate_with_llm(entry, retries=3):
+    prompt = build_prompt(entry)
+    for attempt in range(retries):
+        try:
+            response = llm.predict(prompt)
+            return json.loads(response)
+        except Exception as e:
+            print(f"Error (attempt {attempt+1}): {e}")
+            time.sleep(2)
+    return {
+        "Alignment": "Error",
+        "Accuracy": "Error",
+        "Clarity": "Error",
+        "Comments": "LLM call failed.",
+        "Revised_Question": None,
+        "Revised_Answer": None
+    }
+
+# ====== Step 5: Run Full Pipeline and Export to Excel ======
+def full_pipeline(input_excel: str, final_excel_output: str):
+    json_path = convert_excel_to_json(input_excel, "temp_data.json")
+    qa_data = read_json_file(json_path)
+
+    results = []
+    for i, entry in enumerate(qa_data):
+        print(f"Validating {i+1}/{len(qa_data)}...")
+        validation = validate_with_llm(entry)
+        results.append({
+            "Original Question": entry["Original Question"],
+            "Original Answer": entry["Original Answer"],
+            "Diverse Question": entry["Diverse Question"],
+            "Diverse Answer": entry["Diverse Answer"],
+            "Alignment": validation.get("Alignment", ""),
+            "Accuracy": validation.get("Accuracy", ""),
+            "Clarity": validation.get("Clarity", ""),
+            "Comments": validation.get("Comments", ""),
+            "Revised Question": validation.get("Revised_Question", ""),
+            "Revised Answer": validation.get("Revised_Answer", "")
+        })
+
+    df_out = pd.DataFrame(results)
+    df_out.to_excel(final_excel_output, index=False)
+    print(f"\nValidation complete. Final Excel saved to: {final_excel_output}")
+
+# ====== Example Usage ======
+input_excel_path = r"c:\Users\P872643\Downloads\test.xlsx"
+output_excel_path = r"c:\Users\P872643\Downloads\validated_output.xlsx"
+full_pipeline(input_excel_path, output_excel_path)
+
+
+
+
+
+
+
+
 import json
 import time
 import pandas as pd
