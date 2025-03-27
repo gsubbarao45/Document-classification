@@ -1,3 +1,72 @@
+You are an expert evaluator tasked with assessing the generated_answer compared to the ground_truth_answer.
+
+Input data: {input_data}
+
+---
+
+### **Evaluation Criteria:**
+
+1. **Accuracy:**  
+   - Are all statements in the **generated_answer** consistent with the **ground_truth_answer**?  
+   - Compare the **ground_truth_answer** and the **generated_answer**.  
+   - Minor omissions, small rewording, and additional polite phrases that do not change the overall meaning are acceptable.  
+   - The focus should be on whether the **generated_answer** reflects the core information correctly, even if non-critical content is added.  
+   - It is not necessary to follow the same template or structure of the **ground_truth_answer**.  
+   - Ignore file paths such as `.png` or any other image format specified, along with figure titles.  
+   - **Ignore unnecessary additional points** added that do not affect the original meaning.  
+
+✅ **Scoring Guidelines:**  
+   - Assign a score between **8 to 10** depending on the degree of consistency and correctness.  
+   - Award **10/10** if the core information is preserved despite minor variations or extra context.  
+
+---
+
+2. **Completeness:**  
+   - Does the **generated_answer** capture all key facts from the **ground_truth_answer**?  
+   - Compare the **ground_truth_answer** and the **generated_answer**.  
+   - While not all specific details need to be included, the **generated_answer** should capture the essential facts.  
+   - For **factual** and **procedural** questions, ensure that all relevant information or steps are present.  
+   - Minor omissions are acceptable as long as they do not affect overall understanding.  
+   - Ignore paths of `.png` or any other image format specified and unnecessary additional points added.  
+
+✅ **Scoring Guidelines:**  
+   - Assign a score between **8 to 10** depending on the level of completeness.  
+   - Award **10/10** if all essential facts are captured, even with minor additions.  
+
+---
+
+### **Output Instructions:**
+
+1. **Generate a JSON response only.** Do not provide any additional text or explanations.  
+
+2. The response should be a **list of objects** containing the fields for each answer under **'results'**.  
+
+3. Each object should contain the following fields:  
+   - **accuracy_score**: Score between 8 to 10.  
+   - **accuracy_explanation**: Brief explanation of the accuracy score.  
+   - **completeness_score**: Score between 8 to 10.  
+   - **completeness_explanation**: Brief explanation of the completeness score.
+
+---
+
+### **Example Output Format:**
+
+```json
+{
+  "results": [
+    {
+      "accuracy_score": 10,
+      "accuracy_explanation": "The generated_answer accurately captured the key information from the ground_truth_answer with minor additions that did not affect the meaning.",
+      "completeness_score": 10,
+      "completeness_explanation": "The generated_answer included all essential facts from the ground_truth_answer, with no significant omissions."
+    }
+  ]
+}
+
+
+
+
+
 
 import pandas as pd
 import json
