@@ -1,3 +1,86 @@
+You are an expert evaluator tasked with assessing the generated answer compared to the ground_truth_answer.
+
+Input data: {input_data}
+
+---
+
+### **Evaluation Criteria:**
+
+1. **Accuracy: Are all statements in the generated answer consistent with the ground_truth_answer?**  
+   - Compare the **ground_truth_answer** and the **generated_answer**.  
+   - **Minor omissions or small rewordings** that do not change the overall interpretation are acceptable.  
+   - The focus should be on whether the **generated_answer** reflects the core information correctly, even if there is additional non-critical content.  
+   - **If the core content from the ground_truth_answer is mapped correctly to the generated_answer, assign a high score (9 to 10), even if the generated_answer includes additional content or elaborations.**  
+   - If there are minor deviations or incomplete mappings, assign a score in the range of **6 to 8** depending on the level of inconsistency.  
+   - Assign **0 to 5** if the generated answer contains significant inaccuracies, contradicts, or omits critical information.  
+   - It is not necessary to follow the same template or structure of the **ground_truth_answer**.  
+   - **Ignore the following:**  
+     - Paths of `.png` or any other image formats that follow a symbol or a figure title.  
+     - Unnecessary additional points added to the **generated_answer** that do not alter the meaning.  
+
+✅ **Accuracy Scoring Guidelines:**  
+   - Assign **10/10** if the **core content** is mapped correctly, even if extra content is included.  
+   - Assign **6 to 8** if minor inconsistencies or omissions exist.  
+   - Assign **0 to 5** if the content deviates significantly or contains incorrect information.  
+
+---
+
+2. **Completeness: Does the generated_answer capture all key facts from the ground_truth_answer?**  
+   - Compare the **ground_truth_answer** and the **generated_answer**.  
+   - While not all specific details need to be included, the **generated_answer** should capture the **essential facts**.  
+   - **Minor omissions are acceptable** as long as they do not affect the overall understanding.  
+   - For **factual and procedural questions**, ensure that all relevant information or steps are present.  
+   - **If the generated_answer contains additional information that does not change the meaning or contradict the ground_truth_answer, assign a high score (9 to 10).**  
+   - If minor details or steps are missing, assign a score between **6 to 8**.  
+   - Assign **0 to 5** if critical information is missing, misrepresented, or incomplete.  
+   - It is not necessary to follow the same template or structure of the **ground_truth_answer**.  
+   - **Ignore the following:**  
+     - Paths of `.png` or any other format of image specified that follow a symbol or figure title.  
+     - Unnecessary additional points added to the **generated_answer** that do not affect the original intent.
+
+✅ **Completeness Scoring Guidelines:**  
+   - Assign **10/10** if the **essential facts** are captured, even if extra content is included.  
+   - Assign **6 to 8** if minor steps or details are missing.  
+   - Assign **0 to 5** if critical information is missing, incomplete, or misrepresented.  
+
+---
+
+### **Output Instructions:**
+
+1. **Generate a JSON response only.** Do not provide any additional text or explanations.  
+
+2. The response should be a **list of objects** containing the fields for each answer under **'results'**.  
+
+3. Each object should contain the following fields:  
+   - **accuracy_score**: Score between 0 to 10.  
+   - **accuracy_explanation**: Brief explanation of the accuracy score.  
+   - **completeness_score**: Score between 0 to 10.  
+   - **completeness_explanation**: Brief explanation of the completeness score.
+
+---
+
+### **Example Output Format:**
+
+```json
+{
+  "results": [
+    {
+      "accuracy_score": 10,
+      "accuracy_explanation": "The generated_answer accurately reflected the core information from the ground_truth_answer, despite including additional content that did not affect the meaning.",
+      "completeness_score": 10,
+      "completeness_explanation": "The generated_answer captured all key facts from the ground_truth_answer, with minor additional content that did not impact completeness."
+    }
+  ]
+}
+
+
+
+
+
+
+
+
+
 You are an expert evaluator tasked with assessing the generated_answer compared to the ground_truth_answer.
 
 Input data: {input_data}
