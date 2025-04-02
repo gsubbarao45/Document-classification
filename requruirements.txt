@@ -31,6 +31,163 @@ def convert_excel_to_json(file_path: str, output_json_path: str = "output_data.j
         })
     with open(output_json_path, "w", encoding="utf-8") as json_file:
         json.dump(json_data, json_file, indent=4, ensure_ascii=False)
+    return output_json_path
+
+# ====== Read JSON File ======
+def read_json_file(file_path: str) -> list:
+    try:
+        with open(file_path, "r", encoding="utf-8") as json_file:
+            return json.load(json_file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+# ====== Build Prompt ======
+def build_prompt(entry):
+    return f"""
+You are validating a diverse synthetic Q&A pair against its original version. Follow the steps and return a JSON output.
+
+Question Type: {entry['Question_type']}
+Original Question: {entry['Original Question']}
+Original Answer: {entry['Original Answer']}
+
+Diverse Question: {entry['Diverse Question']}
+Diverse Answer: {entry['Diverse Answer']}
+
+---
+
+Critique Steps:
+1. Semantic Alignment
+2. Terminology & Clarity
+3. Faithfulness
+4. Logical Consistency
+5. Bias & Ethics
+6. Completeness
+
+Return this exact JSON format:
+{{
+  "Alignment": "✅/⚠/❌",
+  "Accuracy": "✅/⚠/❌",
+  "Clarity": "✅/⚠/❌",
+  "Logical Check": "✅/⚠/❌",
+  "Bias Check": "✅/⚠/❌",
+  "Completeness": "✅/⚠/❌",
+  "Comments": "Short explanation",
+  "Revised_Question": "If needed, else null",
+  "Revised_Answer": "If needed, else null"
+}}
+"""
+
+# ====== Scoring System ======
+def calculate_score(result):
+    score_map = {"✅": 2, "⚠": 1, "❌": 0}
+    criteria = ["Alignment", "Accuracy", "Clarity", "Logical Check", "Bias Check", "Completeness"]
+    return sum(score_map.get(result.get(criterion, "❌"), 0) for criterion in criteria)
+
+# ====== Append Each Result ======
+def append_each_result(result, output_path):
+    data = read_json_file(output_path)
+    data.append(result)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+# ====== Validate with LLM ======
+def validate_with_llm(entry, index, retries=3):
+    prompt = build_prompt(entry)
+    for attempt in range(retries):
+        try:
+            response = llm.predict(prompt)
+            result = json.loads(response)
+            result["Score"] = calculate_score(result)
+            return index, result
+        except Exception as e:
+            time.sleep(2)
+    return index, {
+        "Alignment": "Error", "Accuracy": "Error", "Clarity": "Error",
+        "Logical Check": "Error", "Bias Check": "Error", "Completeness": "Error",
+        "Comments": "LLM call failed.", "Revised_Question": None, "Revised_Answer": None, "Score": 0
+    }
+
+# ====== Select Best Question per Original ======
+def select_best_question(results):
+    grouped = {}
+    for res in results:
+        key = res["Original Question"]
+        grouped.setdefault(key, []).append(res)
+    return [max(group, key=lambda x: x["Score"]) for group in grouped.values()]
+
+# ====== Full Pipeline ======
+def full_pipeline(input_excel, final_excel_output, final_json_output, max_workers=5):
+    temp_json = convert_excel_to_json(input_excel, "temp_data.json")
+    qa_data = read_json_file(temp_json)
+    results = [None] * len(qa_data)
+    all_output_path = final_json_output.replace(".json", "_all.json")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(validate_with_llm, entry, i) for i, entry in enumerate(qa_data)]
+        for future in as_completed(futures):
+            index, result = future.result()
+            validated = {
+                "Question Type": qa_data[index]["Question_type"],
+                "Original Question": qa_data[index]["Original Question"],
+                "Original Answer": qa_data[index]["Original Answer"],
+                "Diverse Question": qa_data[index]["Diverse Question"],
+                "Diverse Answer": qa_data[index]["Diverse Answer"],
+                "Alignment": result["Alignment"], "Accuracy": result["Accuracy"],
+                "Clarity": result["Clarity"], "Logical Check": result["Logical Check"],
+                "Bias Check": result["Bias Check"], "Completeness": result["Completeness"],
+                "Comments": result["Comments"], "Revised Question": result["Revised_Question"],
+                "Revised Answer": result["Revised_Answer"], "Score": result["Score"]
+            }
+            results[index] = validated
+            append_each_result(validated, all_output_path)
+
+    best_results = select_best_question(results)
+    pd.DataFrame(best_results).to_excel(final_excel_output, index=False)
+    with open(final_json_output, "w", encoding="utf-8") as f:
+        json.dump(best_results, f, indent=4, ensure_ascii=False)
+
+# ====== Example Usage ======
+input_excel_path = r"c:\Users\P872643\Downloads\test.xlsx"
+output_excel_path = r"c:\Users\P872643\Downloads\best_validated_output.xlsx"
+output_json_path = r"c:\Users\P872643\Downloads\best_validated_output.json"
+full_pipeline(input_excel_path, output_excel_path, output_json_path, max_workers=5)
+
+
+
+
+
+import pandas as pd
+import json
+import time
+from openai import AzureChatOpenAI
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# ====== Azure LLM Config ======
+azure_openai_endpoint = "https://<your-endpoint>.openai.azure.com"  # Replace with your endpoint
+azure_openai_api_version = "2023-12-01-preview"
+llm = AzureChatOpenAI(
+    temperature=0,
+    api_version=azure_openai_api_version,
+    azure_endpoint=azure_openai_endpoint,
+    deployment_name="ssgpt-40",
+    seed=1
+)
+
+# ====== Convert Excel to JSON ======
+def convert_excel_to_json(file_path: str, output_json_path: str = "output_data.json") -> str:
+    df = pd.read_excel(file_path, dtype=str).fillna("")
+    json_data = []
+    for _, row in df.iterrows():
+        json_data.append({
+            "Question_type": row.get("Question Type", ""),
+            "Original Question": row.get("Original Question", ""),
+            "Original Answer": row.get("Original Answer", ""),
+            "Diverse Question": row.get("Diverse Question", ""),
+            "Diverse Answer": row.get("Diverse Answer", ""),
+            "Source File": row.get("Source File", "")
+        })
+    with open(output_json_path, "w", encoding="utf-8") as json_file:
+        json.dump(json_data, json_file, indent=4, ensure_ascii=False)
     print(f"Data successfully converted to JSON and saved to {output_json_path}")
     return output_json_path
 
