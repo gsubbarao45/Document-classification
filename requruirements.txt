@@ -1,4 +1,40 @@
 import pandas as pd
+import tiktoken
+
+# Load the Excel file
+df = pd.read_excel("your_file.xlsx")  # replace with your actual file path
+
+# Initialize tokenizer (e.g., for gpt-3.5-turbo or gpt-4)
+tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
+
+# Rename columns if needed
+df.columns = df.columns.str.strip()
+
+# Extract relevant columns (assuming these are named 'Question' and 'Answer')
+questions = df['Question'].fillna("").astype(str)
+answers = df['Answer'].fillna("").astype(str)
+
+# Token count functions
+df['Question_Tokens'] = questions.apply(lambda x: len(tokenizer.encode(x)))
+df['Answer_Tokens'] = answers.apply(lambda x: len(tokenizer.encode(x)))
+df['Total_Tokens'] = df['Question_Tokens'] + df['Answer_Tokens']
+
+# Final output
+final_df = df[['Question', 'Answer', 'Question_Tokens', 'Answer_Tokens', 'Total_Tokens']]
+
+# Save to Excel
+final_df.to_excel("QA_with_Token_Counts.xlsx", index=False)
+
+
+
+
+
+
+
+
+
+
+import pandas as pd
 import json
 import time
 from openai import AzureChatOpenAI
