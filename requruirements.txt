@@ -1,3 +1,87 @@
+import os
+import base64
+from pdf2image import convert_from_path
+from langchain_core.messages import HumanMessage
+from langchain_openai import AzureChatOpenAI
+
+# Set paths
+pdf_path = r"c:\Users\P872643\Downloads\D-02 Cash Note 3.0.pdf"
+poppler_path = r"C:\Users\P872643\Downloads\poppler-0.68.8\bin"
+output_folder = "pdf_images"
+
+# Ensure output folder exists
+os.makedirs(output_folder, exist_ok=True)
+
+# Convert PDF to images
+images = convert_from_path(pdf_path, 500, poppler_path=poppler_path)
+
+# Initialize the LLM
+llm = AzureChatOpenAI(
+    temperature=0,
+    api_version="2023-07-01-preview",
+    azure_endpoint="https://<your-endpoint>.openai.azure.com",  # Replace with your endpoint
+    deployment_name="ssgpt-40",
+    seed=1
+)
+
+# Store all extracted contents
+extract_list = []
+
+# Process each page
+for i, img in enumerate(images):
+    image_path = os.path.join(output_folder, f"page_{i+1}.png")
+    img.save(image_path, "PNG")
+    print(f"\n--- Processing Page {i+1} ---\n")
+
+    # Read and encode image
+    with open(image_path, "rb") as image_file:
+        image_data = base64.b64encode(image_file.read()).decode("utf-8")
+
+    # Construct message for LLM
+    message = HumanMessage(
+        content=[
+            {
+                "type": "text",
+                "text": """
+# Objective:
+You are an AI assistant that extracts data from documents and returns them in a structured markdown format.
+
+## Steps:
+1. You are provided with images of PDF pages. Go through each and extract every detail as it appears.
+2. Format the extracted content in markdown, preserving the layout.
+3. Include images, tables, screenshots, and styled elements like borders and bold text.
+4. Add short inline descriptions starting with "image_description:", "table_description:", or "screenshot_description:" based on the content.
+5. Store images in a folder named `images` and refer to them in the markdown.
+
+Do not return as a code block.
+"""
+            },
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{image_data}"}
+            }
+        ]
+    )
+
+    # Get response from GPT-40
+    response = llm.invoke([message])
+    print("Response:", response.content)
+    extract_list.append(response.content)
+
+# Optional: save to a markdown file
+with open("extracted_output.md", "w", encoding="utf-8") as f:
+    for item in extract_list:
+        f.write(item + "\n\n")
+
+
+
+
+
+
+
+
+
+
 import pandas as pd
 import tiktoken
 
