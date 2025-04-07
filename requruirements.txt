@@ -2,6 +2,35 @@ import pandas as pd
 import tiktoken
 
 # Load the Excel file
+df = pd.read_excel("your_file.xlsx")  # Replace with your filename
+
+# Use GPT-4 tokenizer
+encoding = tiktoken.encoding_for_model("gpt-4")
+
+# Clean up and ensure columns exist
+df.columns = df.columns.str.strip()
+df['Question'] = df['Question'].fillna("").astype(str)
+df['Answer'] = df['Answer'].fillna("").astype(str)
+
+# Calculate token counts
+df['Question_Tokens'] = df['Question'].apply(lambda x: len(encoding.encode(x)))
+df['Answer_Tokens'] = df['Answer'].apply(lambda x: len(encoding.encode(x)))
+df['Total_Tokens'] = df['Question_Tokens'] + df['Answer_Tokens']
+
+# Save to Excel
+df[['Question', 'Answer', 'Question_Tokens', 'Answer_Tokens', 'Total_Tokens']].to_excel("QA_with_GPT4_Tokens.xlsx", index=False)
+
+
+
+
+
+
+
+
+import pandas as pd
+import tiktoken
+
+# Load the Excel file
 df = pd.read_excel("your_file.xlsx")  # replace with your actual file path
 
 # Initialize tokenizer (e.g., for gpt-3.5-turbo or gpt-4)
