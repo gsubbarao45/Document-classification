@@ -1,3 +1,36 @@
+def convert_excel_to_json(file_path: str, output_json_path: str) -> str:
+    if not os.path.exists(file_path):
+        print(f"[ERROR] Excel file does not exist at: {file_path}")
+        return ""
+
+    try:
+        df = pd.read_excel(file_path, dtype=str)
+        df = df.fillna("")
+    except Exception as e:
+        print(f"[ERROR] Could not read Excel file: {e}")
+        return ""
+
+    json_data = []
+    for i, row in df.iterrows():
+        json_data.append({
+            "id": str(i+1),
+            "question_type": row.get("Question Type", ""),
+            "original_question": row.get("Question", ""),
+            "original_answer": row.get("Answer", "")
+        })
+
+    with open(output_json_path, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, indent=4, ensure_ascii=False)
+    print(f"[INFO] Converted Excel to JSON: {output_json_path}")
+    return output_json_path
+
+
+
+
+
+
+
+
 import os
 import json
 import re
