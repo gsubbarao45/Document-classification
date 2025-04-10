@@ -1,6 +1,93 @@
 # main.py
 
 import os
+from ssrai import SSRAIClient
+from concurrent.futures import ThreadPoolExecutor
+
+from question_prompts import *
+from utils.pdf_utils import extract_text_from_pdf
+from utils.question_generator import (
+    generate_questions_in_chunks,
+    remove_duplicates,
+    save_questions_to_excel
+)
+from utils.token_utils import count_tokens, distribute_question_types_by_tokens
+
+# ========== Config ==========
+poppler_path = r"C:\path\to\poppler-0.68.0\bin"
+pdf_dir = "data"
+output_dir = "output"
+model_name = "gpt-4"
+
+# Initialize model client
+ssc_rai_client = SSRAIClient(
+    host="https://api-uat.statestr.com/",
+    eam_consumer_key="YOUR_KEY",
+    eam_consumer_secret="YOUR_SECRET",
+    auth_type="pat",
+    api_version="1.0"
+)
+
+question_modules = {
+    "Factual": FACTUAL_PROMPT,
+    "Conceptual": CONCEPTUAL_PROMPT,
+    "Inferential": INFERENTIAL_PROMPT,
+    "Procedural": PROCEDURAL_PROMPT,
+    "Reasoning-Based": REASONING_PROMPT
+}
+
+def process_single_pdf(pdf_path, filename):
+    print(f"\n[INFO] Processing: {filename}")
+    text = extract_text_from_pdf(pdf_path, poppler_path, ssc_rai_client)
+    if not text:
+        print("[ERROR] No text extracted.")
+        return
+    tokens = count_tokens(text, model_name)
+    print(f"[INFO] Tokens: {tokens}")
+    question_counts = distribute_question_types_by_tokens(tokens)
+
+    llm = ssc_rai_client.llm(wrapper="langchain", model_name="power-proxy.gpt4_o", model_kwargs={"response_format": {"type": "json_object"}})
+    all_qs = []
+
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(generate_questions_in_chunks, text, count, question_modules[qtype], llm): qtype
+            for qtype, count in question_counts.items()
+        }
+        for f in futures:
+            qtype = futures[f]
+            try:
+                results = f.result()
+                for q in results:
+                    all_qs.append({"Question Type": qtype, "Question": q["question"], "Answer": q["answer"]})
+            except Exception as e:
+                print(f"[ERROR] {qtype}: {e}")
+
+    final = remove_duplicates(all_qs)
+    excel_path = os.path.join(output_dir, filename.replace(".pdf", "_questions.xlsx"))
+    save_questions_to_excel(final, excel_path)
+
+
+def process_all_pdfs():
+    os.makedirs(output_dir, exist_ok=True)
+    for file in os.listdir(pdf_dir):
+        if file.endswith(".pdf"):
+            pdf_path = os.path.join(pdf_dir, file)
+            process_single_pdf(pdf_path, file)
+
+
+if __name__ == "__main__":
+    process_all_pdfs()
+
+
+
+
+
+
+
+# main.py
+
+import os
 from question_prompts import (
     FACTUAL_PROMPT,
     CONCEPTUAL_PROMPT,
