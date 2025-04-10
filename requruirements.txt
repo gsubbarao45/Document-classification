@@ -1,3 +1,235 @@
+import os
+import json
+import re
+import base64
+import warnings
+import pandas as pd
+from pdf2image import convert_from_path
+from concurrent.futures import ThreadPoolExecutor
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from langchain_core.messages import HumanMessage
+from transformers import GPT2TokenizerFast
+from ssrai import SSRAIClient
+
+# --- Setup LLM ---
+chat_model_name = "power-proxy.gpt4_o"
+model_kwargs = {"response_format": {"type": "json_object"}}
+ssc_rai_client = SSRAIClient(
+    host="https://api-uat.statestr.com/",
+    eam_consumer_key="R8RGauG80jlIIGF6or9RZJvApCUSYSİJ",
+    auth_type="pat",
+    eam_consumer_secret="QnhntAtPR2bXyPQG",
+    api_version="1.0"
+)
+llm = ssc_rai_client.llm(wrapper="langchain", model_name=chat_model_name, model_kwargs=model_kwargs)
+
+# --- Token Counter ---
+tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+
+def count_tokens(text):
+    return len(tokenizer.encode(text))
+
+# --- Extract and Clean JSON ---
+def extract_valid_json(response):
+    try:
+        json_start = response.find('[')
+        json_end = response.rfind(']')
+        if json_start == -1:
+            return []
+        if json_end == -1:
+            response += ']'
+            json_end = len(response) - 1
+        json_text = response[json_start:json_end + 1]
+        json_text = re.sub(r'[\x00-\x1F\x7F]', '', json_text)
+        json_text = re.sub(r'(?<=\})(?=\s*\{)', '},', json_text)
+        json_objects = re.findall(r'\{.*?\}', json_text, re.DOTALL)
+        cleaned = []
+        for obj in json_objects:
+            try:
+                parsed = json.loads(obj.strip())
+                if parsed.get("question", "").strip() and parsed.get("answer", "").strip():
+                    cleaned.append(parsed)
+            except:
+                continue
+        return cleaned
+    except:
+        return []
+
+# --- Save to Excel ---
+def save_questions_to_excel(questions, output_file):
+    if not questions: return
+    df = pd.DataFrame(questions)
+    for col in ["Question Type", "Question", "Answer"]:
+        if col not in df.columns:
+            df[col] = ""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        df.to_excel(output_file, index=False, engine="openpyxl")
+
+# --- Remove Duplicates ---
+def remove_duplicates(questions):
+    seen = set()
+    unique = []
+    for q in questions:
+        key = q.get("Question", "").strip()
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(q)
+    return unique
+
+# --- Extract Text from PDF ---
+def extract_text_from_pdf(pdf_path, output_folder="pdf_images"):
+    os.makedirs(output_folder, exist_ok=True)
+    images = convert_from_path(pdf_path, 500)
+    results = [None] * len(images)
+    def process_page(i, img):
+        try:
+            image_path = os.path.join(output_folder, f"page_{i+1}.png")
+            img.save(image_path, "PNG")
+            with open(image_path, "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode("utf-8")
+            message = HumanMessage(content=[
+                {"type": "text", "text": "Extract all content as markdown with layout, tables, images etc."},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}}
+            ])
+            response = llm.invoke([message])
+            return i, response.content
+        except Exception as e:
+            return i, f"[ERROR]: {str(e)}"
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(process_page, i, img) for i, img in enumerate(images)]
+        for future in futures:
+            i, content = future.result()
+            results[i] = content
+    return "\n".join(results)
+
+# --- Generate Questions from Text ---
+def generate_questions(paragraph, num_questions, prompt_template):
+    prompt = PromptTemplate(input_variables=["paragraph", "num_questions"], template=prompt_template)
+    chain = LLMChain(llm=llm, prompt=prompt)
+    response = chain.predict(paragraph=paragraph, num_questions=str(num_questions))
+    return extract_valid_json(response)
+
+def generate_questions_in_chunks(paragraph, num_questions, prompt_template, chunk_size=30):
+    all_questions = []
+    for i in range(0, num_questions, chunk_size):
+        chunk = generate_questions(paragraph, min(chunk_size, num_questions - i), prompt_template)
+        all_questions.extend(chunk)
+    return all_questions
+
+# --- Main PDF Processing Function ---
+def process_pdf_for_multiple_question_types(pdf_path, question_type_tokens_ratio):
+    extracted_text = extract_text_from_pdf(pdf_path)
+    total_tokens = count_tokens(extracted_text)
+    question_type_counts = {
+        q_type: max(1, int(total_tokens * ratio)) for q_type, ratio in question_type_tokens_ratio.items()
+    }
+    prompts = {
+        "Factual": FACTUAL_PROMPT,
+        "Procedural": PROCEDURAL_PROMPT,
+        "Conceptual": CONCEPTUAL_PROMPT,
+        "Inferential": INFERENTIAL_PROMPT,
+        "Reasoning-Based": REASONING_PROMPT
+    }
+    all_questions = []
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(generate_questions_in_chunks, extracted_text, count, prompts[q_type]): q_type
+            for q_type, count in question_type_counts.items()
+        }
+        for future in futures:
+            q_type = futures[future]
+            for qa in future.result():
+                all_questions.append({
+                    "Question Type": q_type,
+                    "Question": qa.get("question", ""),
+                    "Answer": qa.get("answer", ""),
+                    "Source File": os.path.basename(pdf_path)
+                })
+    return remove_duplicates(all_questions)
+
+# --- Convert Excel to JSON ---
+def convert_excel_to_json(file_path: str, output_json_path: str) -> str:
+    df = pd.read_excel(file_path, dtype=str).fillna("")
+    json_data = [
+        {
+            "id": str(i+1),
+            "question_type": row.get("Question Type", ""),
+            "original_question": row.get("Question", ""),
+            "original_answer": row.get("Answer", "")
+        }
+        for i, row in df.iterrows()
+    ]
+    with open(output_json_path, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, indent=4)
+    return output_json_path
+
+# --- Generate Diverse Questions from JSON ---
+def generate_diverse_questions_from_json(json_path, num_diverse_questions=3, batch_size=2):
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    prompt_template = PromptTemplate(
+        input_variables=["input_json", "num_diverse_questions"],
+        template=DIVERSE_QUESTION_PROMPT
+    )
+    chain = LLMChain(llm=llm, prompt=prompt_template)
+
+    def split_batches(items, size):
+        for i in range(0, len(items), size):
+            yield items[i:i+size]
+
+    all_responses = []
+    for batch in split_batches(data, batch_size):
+        try:
+            input_json = json.dumps(batch, ensure_ascii=False)
+            response = chain.predict(input_json=input_json, num_diverse_questions=str(num_diverse_questions))
+            json_start = response.find('{')
+            json_end = response.rfind('}')
+            response_json = json.loads(response[json_start:json_end+1])
+            all_responses.append(response_json)
+        except Exception as e:
+            print(f"[Batch Error]: {e}")
+            continue
+    return all_responses
+
+# --- Example Usage ---
+FACTUAL_PROMPT = "Generate factual Q&A from: {paragraph}"
+CONCEPTUAL_PROMPT = "Generate conceptual Q&A from: {paragraph}"
+INFERENTIAL_PROMPT = "Generate inferential Q&A from: {paragraph}"
+REASONING_PROMPT = "Generate reasoning-based Q&A from: {paragraph}"
+PROCEDURAL_PROMPT = "Generate procedural Q&A from: {paragraph}"
+
+DIVERSE_QUESTION_PROMPT = """You are tasked to generate diverse question-answer pairs across multiple question types...
+
+[trimmed for brevity; your original prompt goes here]"""
+
+if __name__ == "__main__":
+    pdf_path = "input.pdf"
+    excel_output_path = "output_questions.xlsx"
+    json_output_path = "output_questions.json"
+
+    token_ratios = {
+        "Factual": 0.2,
+        "Conceptual": 0.2,
+        "Inferential": 0.2,
+        "Reasoning-Based": 0.2,
+        "Procedural": 0.2
+    }
+
+    questions = process_pdf_for_multiple_question_types(pdf_path, token_ratios)
+    save_questions_to_excel(questions, excel_output_path)
+    json_file_path = convert_excel_to_json(excel_output_path, json_output_path)
+    diverse_output = generate_diverse_questions_from_json(json_file_path, num_diverse_questions=3, batch_size=2)
+    print(json.dumps(diverse_output, indent=4))
+
+
+
+
+
+
+
 def split_into_fixed_batches(input_list, batch_size=BATCH_SIZE):
     for i in range(0, len(input_list), batch_size):
         yield input_list[i:i + batch_size]
