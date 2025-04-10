@@ -1,3 +1,91 @@
+# utils/tokens.py
+
+import tiktoken
+
+def count_tokens(text, model_name="gpt-4"):
+    """Count tokens using tiktoken for the specified model."""
+    enc = tiktoken.encoding_for_model(model_name)
+    return len(enc.encode(text))
+
+def distribute_question_types_by_tokens(total_tokens):
+    """Distribute question types based on total token count."""
+    distribution = {
+        "Factual": 0.2,
+        "Procedural": 0.2,
+        "Conceptual": 0.2,
+        "Inferential": 0.2,
+        "Reasoning-Based": 0.2
+    }
+
+    # Estimate 60 tokens per question-answer pair
+    return {
+        qtype: max(1, int(ratio * total_tokens // 60))
+        for qtype, ratio in distribution.items()
+    }
+
+from utils.tokens import count_tokens, distribute_question_types_by_tokens
+from utils.pdf_utils import extract_text_from_pdf
+from utils.question_generator import generate_questions_by_type, remove_duplicates
+from question_prompts import *
+from ssrai import SSRAIClient
+import pandas as pd
+import os
+
+# Step 1: Initialize SSRAI model
+ssc_rai_client = SSRAIClient(
+    host="https://api-uat.statestr.com/",
+    eam_consumer_key="R8RGauG80jlIIGF6or9RZJvApCUSYSİJ",
+    eam_consumer_secret="QnhntAtPR2bXyPQG",
+    auth_type="pat",
+    api_version="1.0"
+)
+chat_model_name = "power-proxy.gpt4_o"
+llm = ssc_rai_client.llm(
+    wrapper="langchain",
+    model_name=chat_model_name,
+    model_kwargs={"response_format": {"type": "json_object"}}
+)
+
+# Step 2: Setup question prompt templates
+question_modules = {
+    "Factual": FACTUAL_PROMPT,
+    "Conceptual": CONCEPTUAL_PROMPT,
+    "Inferential": INFERENTIAL_PROMPT,
+    "Procedural": PROCEDURAL_PROMPT,
+    "Reasoning-Based": REASONING_PROMPT,
+}
+
+# Step 3: Input PDF
+pdf_path = "data/sample.pdf"
+
+# Step 4: Extract markdown text from PDF
+extracted_text = extract_text_from_pdf(pdf_path, llm)
+
+# Step 5: Count tokens
+total_tokens = count_tokens(extracted_text)
+print(f"Total tokens: {total_tokens}")
+
+# Step 6: Distribute questions
+question_type_counts = distribute_question_types_by_tokens(total_tokens)
+print(f"Question distribution: {question_type_counts}")
+
+# Step 7: Generate questions
+questions = generate_questions_by_type(extracted_text, question_type_counts, question_modules, llm)
+deduped = remove_duplicates(questions)
+
+# Step 8: Save to Excel
+output_file = "output/questions.xlsx"
+os.makedirs(os.path.dirname(output_file), exist_ok=True)
+df = pd.DataFrame(deduped)
+df.to_excel(output_file, index=False)
+print(f"Saved {len(df)} questions to {output_file}")
+
+
+
+
+
+
+
 main.py
 
 
