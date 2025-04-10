@@ -1,3 +1,62 @@
+main.py
+
+
+# ===========================
+# main.py
+# ===========================
+
+import os
+import pandas as pd
+from utils.pdf_utils import extract_text_from_pdf
+from utils.question_generator import process_pdf_for_multiple_question_types
+from question_prompts import *
+from ssrai import SSRAIClient
+
+# Step 1: Set up SSRAI client and model
+ssc_rai_client = SSRAIClient(
+    host="https://api-uat.statestr.com/",
+    eam_consumer_key="R8RGauG80jlIIGF6or9RZJvApCUSYSİJ",
+    eam_consumer_secret="QnhntAtPR2bXyPQG",
+    auth_type="pat",
+    api_version="1.0"
+)
+chat_model_name = "power-proxy.gpt4_o"
+llm = ssc_rai_client.llm(wrapper="langchain", model_name=chat_model_name, model_kwargs={"response_format": {"type": "json_object"}})
+
+# Step 2: Define question type counts
+question_type_counts = {
+    "Factual": 10,
+    "Conceptual": 5,
+    "Inferential": 5,
+    "Procedural": 5,
+    "Reasoning-Based": 5
+}
+
+question_modules = {
+    "Factual": FACTUAL_PROMPT,
+    "Conceptual": CONCEPTUAL_PROMPT,
+    "Inferential": INFERENTIAL_PROMPT,
+    "Procedural": PROCEDURAL_PROMPT,
+    "Reasoning-Based": REASONING_PROMPT,
+}
+
+# Step 3: Process PDF and generate questions
+pdf_path = "data/sample.pdf"
+questions, extracted_text = process_pdf_for_multiple_question_types(pdf_path, question_type_counts, question_modules, llm)
+
+# Step 4: Save to Excel
+output_file = "output/questions.xlsx"
+os.makedirs(os.path.dirname(output_file), exist_ok=True)
+df = pd.DataFrame(questions)
+df.to_excel(output_file, index=False)
+print(f"Saved {len(df)} questions to {output_file}")
+
+
+
+
+
+
+
 import os
 import base64
 import concurrent.futures
