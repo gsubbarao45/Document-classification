@@ -1,3 +1,61 @@
+def split_into_fixed_batches(input_list, batch_size=BATCH_SIZE):
+    for i in range(0, len(input_list), batch_size):
+        yield input_list[i:i + batch_size]
+
+def generate_diverse_questions_from_excel(excel_path):
+    df = pd.read_excel(excel_path)
+    df = df.dropna(subset=["Question", "Answer"])
+
+    input_data = []
+    for _, row in df.iterrows():
+        input_data.append({
+            "id": str(uuid.uuid4()),
+            "original_question": row["Question"],
+            "original_answer": row["Answer"]
+        })
+
+    ssc_rai_client = SSRAIClient(
+        host="https://api-uat.statestr.com/",
+        eam_consumer_key="R8RGauG80jlIIGF6or9RZJvApCUSYSİJ",
+        auth_type="pat",
+        eam_consumer_secret="QnhntAtPR2bXyPQG",
+        api_version="1.0"
+    )
+    llm = ssc_rai_client.llm(wrapper="langchain", model_name="power-proxy.gpt4_o")
+
+    prompt = PromptTemplate(
+        input_variables=["input_json", "num_diverse_questions"],
+        template=DIVERSE_QUESTION_PROMPT
+    )
+
+    llm_chain = LLMChain(llm=llm, prompt=prompt)
+
+    all_responses = []
+    batch_number = 1
+    for batch in split_into_fixed_batches(input_data, BATCH_SIZE):
+        print(f"Processing batch {batch_number} with {len(batch)} question-answer pairs...")
+        batch_input_json = json.dumps(batch)
+        try:
+            response = llm_chain.predict(
+                input_json=batch_input_json,
+                num_diverse_questions=str(num_diverse_questions)
+            )
+            response_json = json.loads(response)
+            all_responses.extend(response_json)
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse response for batch {batch_number}: {e}")
+        batch_number += 1
+
+    print(json.dumps(all_responses, indent=4))
+    return all_responses
+
+
+
+
+
+
+
+
 def distribute_question_types_by_tokens(total_tokens):
     distribution = {
         "Factual": 0.25,
