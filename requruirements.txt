@@ -1,3 +1,20 @@
+def distribute_question_types_by_tokens(total_tokens):
+    distribution = {
+        "Factual": 0.25,
+        "Procedural": 0.2,
+        "Conceptual": 0.2,
+        "Inferential": 0.2,
+        "Reasoning-Based": 0.15
+    }
+    return {
+        qtype: max(1, int(ratio * total_tokens // 100))
+        for qtype, ratio in distribution.items()
+    }
+
+
+
+
+
 def distribute_questions_by_tokens(total_tokens, total_questions=50):
     weights = {
         "Factual": 0.3,
