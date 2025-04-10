@@ -1,3 +1,114 @@
+# main.py
+
+import os
+from question_prompts import (
+    FACTUAL_PROMPT,
+    CONCEPTUAL_PROMPT,
+    INFERENTIAL_PROMPT,
+    PROCEDURAL_PROMPT,
+    REASONING_PROMPT
+)
+from utils.pdf_utils import extract_text_from_pdf
+from utils.question_generator import (
+    generate_questions_in_chunks,
+    remove_duplicates,
+    save_questions_to_excel
+)
+from utils.token_utils import count_tokens, distribute_question_types_by_tokens
+from ssrai import SSRAIClient
+from concurrent.futures import ThreadPoolExecutor
+
+# ====== Configuration ======
+pdf_path = "data/sample.pdf"  # Your PDF file path
+poppler_path = r"C:\path\to\poppler-0.68.0\bin"  # Adjust for your system
+output_file = "output/questions.xlsx"
+model_name = "gpt-4"
+estimated_tokens_per_qa = 60
+
+# Initialize SSRAIClient
+ssc_rai_client = SSRAIClient(
+    host="https://api-uat.statestr.com/",
+    eam_consumer_key="YOUR_KEY",
+    eam_consumer_secret="YOUR_SECRET",
+    auth_type="pat",
+    api_version="1.0"
+)
+
+question_modules = {
+    "Factual": FACTUAL_PROMPT,
+    "Conceptual": CONCEPTUAL_PROMPT,
+    "Inferential": INFERENTIAL_PROMPT,
+    "Procedural": PROCEDURAL_PROMPT,
+    "Reasoning-Based": REASONING_PROMPT
+}
+
+
+def process_pdf_for_multiple_question_types():
+    print("[INFO] Extracting text from PDF...")
+    extracted_text = extract_text_from_pdf(pdf_path, poppler_path, ssc_rai_client)
+
+    if not extracted_text:
+        print("[ERROR] No text was extracted.")
+        return []
+
+    total_tokens = count_tokens(extracted_text, model_name)
+    print(f"[INFO] Total Tokens in Extracted Text: {total_tokens}")
+
+    question_type_counts = distribute_question_types_by_tokens(total_tokens)
+    print(f"[INFO] Question Distribution: {question_type_counts}")
+
+    llm = ssc_rai_client.llm(
+        wrapper="langchain",
+        model_name="power-proxy.gpt4_o",
+        model_kwargs={"response_format": {"type": "json_object"}}
+    )
+
+    all_questions = []
+
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(
+                generate_questions_in_chunks,
+                extracted_text,
+                count,
+                question_modules[qtype],
+                llm
+            ): qtype
+            for qtype, count in question_type_counts.items()
+        }
+
+        for future in futures:
+            q_type = futures[future]
+            try:
+                questions = future.result()
+                for q in questions:
+                    all_questions.append({
+                        "Question Type": q_type,
+                        "Question": q["question"],
+                        "Answer": q["answer"]
+                    })
+            except Exception as e:
+                print(f"[ERROR] Failed to process {q_type}: {e}")
+
+    return remove_duplicates(all_questions)
+
+
+if __name__ == "__main__":
+    os.makedirs("output", exist_ok=True)
+
+    final_questions = process_pdf_for_multiple_question_types()
+
+    if final_questions:
+        save_questions_to_excel(final_questions, output_file)
+    else:
+        print("[INFO] No questions generated.")
+
+
+
+
+
+
+
 # utils/tokens.py
 
 import tiktoken
