@@ -1,3 +1,108 @@
+import os
+import base64
+import concurrent.futures
+from pdf2image import convert_from_path
+from langchain.schema import HumanMessage
+from langchain.chat_models import AzureChatOpenAI
+import tiktoken
+import pandas as pd
+
+# Azure LLM
+llm = AzureChatOpenAI(
+    temperature=0,
+    api_version="YOUR_AZURE_OPENAI_API_VERSION",
+    azure_endpoint="YOUR_AZURE_ENDPOINT",
+    deployment_name="ssgpt-40",
+    model_name="gpt-4",
+    seed=1
+)
+
+# Token counter
+def count_tokens(text, model_name="gpt-4"):
+    enc = tiktoken.encoding_for_model(model_name)
+    return len(enc.encode(text))
+
+# Process a single page image
+def process_page(i, img, output_folder):
+    try:
+        image_path = os.path.join(output_folder, f"page_{i + 1}.png")
+        img.save(image_path, "PNG")
+        with open(image_path, "rb") as image_file:
+            image_data = base64.b64encode(image_file.read()).decode("utf-8")
+
+        message = HumanMessage(content=[
+            {
+                "type": "text",
+                "text": (
+                    "You are an AI assistant that extracts data from documents and returns them as structured markdown.\n"
+                    "Go through the image and extract every detail exactly as it appears. Do not return as a code block."
+                )
+            },
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
+            }
+        ])
+
+        response = llm.invoke([message])
+        print(f"[DONE] Page {i + 1} processed", flush=True)
+        return (i, response.content)
+
+    except Exception as e:
+        print(f"[ERROR] Page {i + 1} failed: {str(e)}", flush=True)
+        return (i, f"[ERROR on Page {i + 1}]: {str(e)}")
+
+# Extract text from a PDF
+def extract_text_from_pdf(pdf_path, output_folder="pdf_images"):
+    os.makedirs(output_folder, exist_ok=True)
+    images = convert_from_path(pdf_path, 500, poppler_path=r'C:\Users\P872643\Downloads\poppler-0.68.0\bin')
+
+    results = [None] * len(images)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(process_page, i, img, output_folder) for i, img in enumerate(images)]
+        for future in concurrent.futures.as_completed(futures):
+            i, content = future.result()
+            results[i] = content
+
+    combined_text = "\n".join(results)
+    return combined_text
+
+# Process all PDFs in directory
+def process_all_pdfs_in_directory(root_dir, summary_csv="token_summary.csv"):
+    summary = []
+
+    for dirpath, _, filenames in os.walk(root_dir):
+        for file in filenames:
+            if file.lower().endswith(".pdf"):
+                full_path = os.path.join(dirpath, file)
+                print(f"[INFO] Processing: {full_path}")
+                try:
+                    text = extract_text_from_pdf(full_path, output_folder="pdf_images")
+                    tokens = count_tokens(text)
+                    summary.append({"Filename": os.path.basename(full_path), "TotalTokenCount": tokens})
+                except Exception as e:
+                    print(f"[ERROR] Failed to process {file}: {str(e)}")
+
+    df = pd.DataFrame(summary)
+    df.to_csv(summary_csv, index=False)
+    print(f"[INFO] Summary saved to {summary_csv}")
+
+# Run it
+pdf_root_dir = r"H:\Question and answer\Test"
+process_all_pdfs_in_directory(pdf_root_dir)
+
+
+
+
+
+
+
+
+
+
+
+
+
 def generate_diverse_questions_from_excel(excel_path: str, num_diverse_questions: int = 3, batch_size: int = 2):
     import os
     import json
