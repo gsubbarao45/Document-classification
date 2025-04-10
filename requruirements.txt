@@ -1,3 +1,19 @@
+def distribute_questions_by_tokens(total_tokens, total_questions=50):
+    weights = {
+        "Factual": 0.3,
+        "Procedural": 0.2,
+        "Conceptual": 0.2,
+        "Inferential": 0.15,
+        "Reasoning-Based": 0.15
+    }
+
+
+
+
+
+
+
+
 import os
 import base64
 from pdf2image import convert_from_path
