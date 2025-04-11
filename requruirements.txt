@@ -1,6 +1,113 @@
 # main.py
 
 import os
+from question_prompts import (
+    FACTUAL_PROMPT,
+    CONCEPTUAL_PROMPT,
+    INFERENTIAL_PROMPT,
+    PROCEDURAL_PROMPT,
+    REASONING_PROMPT
+)
+from pdf_text_extractor import extract_text_from_pdf
+from question_generator import generate_questions_in_chunks, remove_duplicates, save_questions_to_excel
+from tokens import count_tokens, distribute_question_types_by_tokens
+from ssrai import SSRAIClient
+from concurrent.futures import ThreadPoolExecutor
+
+# ====== Configuration ======
+input_path = r"H:\Question and answer\Test (Resubmit_1025)\36. VFMC AAS25 SOP 5.0 1.pdf"  # Can be a single PDF or directory
+poppler_path = r"C:\Users\P872643\Downloads\poppler-0.68.0\bin"
+output_dir = r"H:\Question and answer\Test"
+model_name = "gpt-4"
+chat_model_name = "power-proxy.gpt4_o"
+
+# Initialize SSRAI Client
+ssc_rai_client = SSRAIClient(
+    host="https://api-uat.statestr.com/",
+    eam_consumer_key="R8RGauG80jlIIGF6or9RZJvApCUSYSİJ",
+    eam_consumer_secret="QnhntAtPR2bXyPQG",
+    auth_type="pat",
+    api_version="1.0"
+)
+
+llm = ssc_rai_client.llm(wrapper="langchain", model_name=chat_model_name)
+
+question_modules = {
+    "Factual": FACTUAL_PROMPT,
+    "Conceptual": CONCEPTUAL_PROMPT,
+    "Inferential": INFERENTIAL_PROMPT,
+    "Procedural": PROCEDURAL_PROMPT,
+    "Reasoning-Based": REASONING_PROMPT
+}
+
+
+def process_single_pdf(pdf_path, filename, llm):
+    print(f"\n[INFO] Processing: {filename}")
+    text = extract_text_from_pdf(pdf_path, poppler_path, ssc_rai_client)
+
+    if not text:
+        print("[ERROR] No text extracted.")
+        return
+
+    tokens = count_tokens(text, model_name)
+    print(f"[INFO] Tokens: {tokens}")
+
+    question_counts = distribute_question_types_by_tokens(tokens)
+
+    all_qs = []
+
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(generate_questions_in_chunks, text, count, question_modules[qtype], llm): qtype
+            for qtype, count in question_counts.items()
+        }
+
+        for f in futures:
+            qtype = futures[f]
+            try:
+                results = f.result()
+                for q in results:
+                    all_qs.append({
+                        "Question Type": qtype,
+                        "Question": q["question"],
+                        "Answer": q["answer"]
+                    })
+            except Exception as e:
+                print(f"[ERROR] {qtype}: {e}")
+
+    final = remove_duplicates(all_qs)
+
+    os.makedirs(output_dir, exist_ok=True)
+    excel_path = os.path.join(output_dir, filename.replace(".pdf", "_questions.xlsx"))
+    save_questions_to_excel(final, excel_path)
+
+
+def process_input_path(path):
+    if os.path.isfile(path) and path.lower().endswith(".pdf"):
+        process_single_pdf(path, os.path.basename(path), llm)
+    elif os.path.isdir(path):
+        for file in os.listdir(path):
+            if file.lower().endswith(".pdf"):
+                pdf_path = os.path.join(path, file)
+                process_single_pdf(pdf_path, file, llm)
+    else:
+        print("[ERROR] Invalid path. Must be a PDF file or folder containing PDFs.")
+
+
+if __name__ == "__main__":
+    process_input_path(input_path)
+
+
+
+
+
+
+
+
+
+# main.py
+
+import os
 from ssrai import SSRAIClient
 from concurrent.futures import ThreadPoolExecutor
 
