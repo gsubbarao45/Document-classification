@@ -1,3 +1,14 @@
+
+Hi Mishra, Sushanta Kumar,
+
+Kindly inform Chiru that I haven’t started the new task assigned by him yet, as our current work is still in progress and taking more time to complete than expected.
+
+Once the current work is completed, I will begin the new assignment.
+
+
+
+
+
 # main.py
 
 import os
