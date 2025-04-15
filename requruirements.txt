@@ -1,3 +1,37 @@
+19
+
+20
+
+21
+
+ssc_rai_client = SSRAIClient(host="https://api-uat.statestr.com/",
+
+22
+
+eam_consumer_key="R8RGauG80jlIIGF6or9RJVAPCUSYSİJ",
+
+23
+
+auth_type= "pat",
+
+24
+
+25
+
+eam_consumer_secret="QnhntAtPR2bXyPQG",
+
+api_version= "1.0")
+
+26
+
+1lm = ssc_rai_client.llm(wrapper="langchain", model_name=chat_model_name)
+
+
+
+
+
+
+
 import os
 import pandas as pd
 from PyPDF2 import PdfReader
