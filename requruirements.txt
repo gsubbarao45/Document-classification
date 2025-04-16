@@ -1,3 +1,133 @@
+import json
+import os
+import pandas as pd
+
+def convert_excel_to_json(file_path: str, output_json_path: str = "output_data.json") -> str:
+    try:
+        df = pd.read_excel(file_path, dtype=str).fillna("")
+
+        # Validate required columns
+        required_columns = {"Question Type", "Question", "Answer"}
+        if not required_columns.issubset(df.columns):
+            raise KeyError(f"Missing columns in Excel file. Required: {required_columns}, Found: {set(df.columns)}")
+
+        json_data = [
+            {
+                "Question_type": row.get("Question Type", ""),
+                "Question": row.get("Question", ""),
+                "Answer": row.get("Answer", "")
+            }
+            for _, row in df.iterrows()
+        ]
+
+        with open(output_json_path, "w", encoding="utf-8") as f:
+            json.dump(json_data, f, indent=4, ensure_ascii=False)
+
+        print(f"Successfully saved JSON to: {output_json_path}")
+        return output_json_path
+
+    except Exception as e:
+        print(f"Error during Excel to JSON conversion: {e}")
+        return ""
+
+def read_json_file(file_path: str) -> list:
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+    except json.JSONDecodeError:
+        print(f"Invalid JSON format in file: {file_path}")
+    except Exception as e:
+        print(f"Unknown error reading JSON: {e}")
+    return []
+
+def split_into_batches(input_list, batch_size=2):
+    if not isinstance(input_list, list):
+        raise ValueError("Input must be a list.")
+    for i in range(0, len(input_list), batch_size):
+        yield input_list[i:i + batch_size]
+
+import json
+from tenacity import retry, stop_after_attempt, wait_exponential
+from langchain.chains import LLMChain
+from prompts import prompt
+from llm_client import llm
+
+llm_chain = LLMChain(llm=llm, prompt=prompt)
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
+def generate_diverse_questions(input_json: str, num_diverse_questions: int):
+    try:
+        response = llm_chain.predict(input_json=input_json, num_diverse_questions=str(num_diverse_questions))
+        return json.loads(response)
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {e}")
+        return []
+
+import os
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from utils import split_into_batches
+from question_generator import generate_diverse_questions
+
+def clear_output(output_json_path="incremental_responses.json"):
+    with open(output_json_path, "w", encoding="utf-8") as f:
+        json.dump([], f, indent=4, ensure_ascii=False)
+
+def append_to_output(batch_responses, output_json_path="incremental_responses.json"):
+    try:
+        if os.path.exists(output_json_path):
+            with open(output_json_path, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+        else:
+            existing_data = []
+        existing_data.extend(batch_responses)
+        with open(output_json_path, "w", encoding="utf-8") as f:
+            json.dump(existing_data, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error appending to output: {e}")
+
+def process_batches(data, batch_size=2, num_diverse_questions=3, max_workers=3):
+    clear_output()
+    futures = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for i, batch in enumerate(split_into_batches(data, batch_size), 1):
+            print(f"Processing Batch {i} with {len(batch)} QA pairs")
+            batch_input = json.dumps(batch)
+            future = executor.submit(generate_diverse_questions, batch_input, num_diverse_questions)
+            futures.append((future, i))
+        for future, batch_no in futures:
+            try:
+                result = future.result()
+                append_to_output(result)
+            except Exception as e:
+                print(f"Batch {batch_no} failed: {e}")
+
+from utils import convert_excel_to_json, read_json_file
+from batch_runner import process_batches
+from excel_export import save_responses_to_excel
+
+file_path = r"h:\your_path\input_excel.xlsx"
+output_json_path = r"h:\your_path\output_data.json"
+incremental_output_path = r"h:\your_path\incremental_responses.json"
+output_excel_path = r"h:\your_path\final_output.xlsx"
+
+json_file_path = convert_excel_to_json(file_path, output_json_path)
+data = read_json_file(json_file_path)
+
+if data:
+    process_batches(data, batch_size=2, num_diverse_questions=5)
+
+save_responses_to_excel(incremental_output_path, output_excel_path)
+
+
+
+
+
+
+
+
 # llm_utils.py
 import json
 from langchain.chains import LLMChain
