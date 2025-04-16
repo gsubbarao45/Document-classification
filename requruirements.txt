@@ -1,3 +1,82 @@
+# llm_utils.py
+import json
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from prompts import DIVERSE_QUESTION_PROMPT
+
+def create_llm_chain(llm):
+    prompt = PromptTemplate(
+        input_variables=["input_json", "num_diverse_questions"],
+        template=DIVERSE_QUESTION_PROMPT
+    )
+    return LLMChain(llm=llm, prompt=prompt)
+
+def split_batches(data, batch_size):
+    for i in range(0, len(data), batch_size):
+        yield data[i:i + batch_size]
+
+def run_diverse_generation(llm_chain, data, batch_size, num_diverse_questions):
+    responses = []
+    for batch in split_batches(data, batch_size):
+        batch_json = json.dumps(batch)
+        try:
+            response = llm_chain.predict(
+                input_json=batch_json,
+                num_diverse_questions=str(num_diverse_questions)
+            )
+            responses.extend(json.loads(response))
+        except Exception as e:
+            print(f"Batch failed: {e}")
+    return responses
+
+# main.py
+from excel_utils import convert_excel_to_json, read_json_file, save_responses_to_excel
+from llm_utils import create_llm_chain, run_diverse_generation
+from ssrai import SSRAIClient
+
+def main():
+    excel_path = "path/to/input.xlsx"
+    output_json_path = "path/to/output.json"
+    final_excel_output = "path/to/final_output.xlsx"
+
+    batch_size = 2
+    num_diverse_questions = 3
+
+    # Step 1: Convert Excel to JSON
+    json_path = convert_excel_to_json(excel_path, output_json_path)
+
+    # Step 2: Read JSON
+    data = read_json_file(json_path)
+
+    # Step 3: Setup LLM
+    ssc_rai_client = SSRAIClient(
+        host="https://api-uat.statestr.com/",
+        eam_consumer_key="YOUR_KEY",
+        eam_consumer_secret="YOUR_SECRET",
+        auth_type="pat",
+        api_version="1.0"
+    )
+    chat_model = ssc_rai_client.llm(wrapper="langchain", model_name="power-proxy.gpt4_o")
+    llm_chain = create_llm_chain(chat_model)
+
+    # Step 4: Run LLM chain
+    responses = run_diverse_generation(
+        llm_chain=llm_chain,
+        data=data,
+        batch_size=batch_size,
+        num_diverse_questions=num_diverse_questions
+    )
+
+    # Step 5: Save to Excel
+    save_responses_to_excel(responses, final_excel_output)
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
 # excel_utils.py
 import pandas as pd
 import json
