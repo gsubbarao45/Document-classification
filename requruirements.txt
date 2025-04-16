@@ -1,3 +1,40 @@
+PDF_DIR=H:\Question and answer\Test
+POPLER_PATH=c:\Users\P872643\Downloads\poppler-0.68.0
+OUTPUT_DIR=H:\Question and answer\Test
+ESTIMATED_TOKENS_PER_QA=80
+CHAT_MODEL_NAME=power-proxy.gpt4_o
+
+SSRAI_HOST=https://api-uat.statestr.com/
+SSRAI_CONSUMER_KEY=R8RGauG80jlIIGF6or9RZJvApCUSYS1J
+SSRAI_CONSUMER_SECRET=QnhntAtPR2bXyPQG
+SSRAI_AUTH_TYPE=pat
+SSRAI_API_VERSION=1.0
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+PDF_DIR = os.getenv("PDF_DIR")
+POPLER_PATH = os.getenv("POPLER_PATH")
+OUTPUT_DIR = os.getenv("OUTPUT_DIR")
+ESTIMATED_TOKENS_PER_QA = int(os.getenv("ESTIMATED_TOKENS_PER_QA", "80"))
+CHAT_MODEL_NAME = os.getenv("CHAT_MODEL_NAME")
+
+SSRAI_CONFIG = {
+    "host": os.getenv("SSRAI_HOST"),
+    "eam_consumer_key": os.getenv("SSRAI_CONSUMER_KEY"),
+    "eam_consumer_secret": os.getenv("SSRAI_CONSUMER_SECRET"),
+    "auth_type": os.getenv("SSRAI_AUTH_TYPE"),
+    "api_version": os.getenv("SSRAI_API_VERSION")
+}
+
+
+
+
+
+
+
 import json
 import os
 import pandas as pd
