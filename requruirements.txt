@@ -1,3 +1,54 @@
+# excel_utils.py
+import pandas as pd
+import json
+
+def convert_excel_to_json(file_path: str, output_path: str) -> str:
+    df = pd.read_excel(file_path, dtype=str)
+    df.fillna("", inplace=True)
+    json_data = []
+
+    for _, row in df.iterrows():
+        json_data.append({
+            "Question_type": row.get("Question Type", ""),
+            "Question": row.get("Question", ""),
+            "Answer": row.get("Answer", ""),
+            "Source File": row.get("Source File", "")
+        })
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, indent=4, ensure_ascii=False)
+
+    return output_path
+
+def read_json_file(path: str) -> list:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_responses_to_excel(all_responses, path: str):
+    data = []
+    for item in all_responses:
+        for d in item["diverse_questions"]:
+            data.append({
+                "ID": item["id"],
+                "Question Type": item["question_type"],
+                "Original Question": item["original_question"],
+                "Original Answer": item["original_answer"],
+                "Diverse Question": d["diverse_question"],
+                "Diverse Answer": d["diverse_answer"]
+            })
+
+    df = pd.DataFrame(data)
+    df.sort_values(by=["Question Type", "ID"], inplace=True)
+    df.to_excel(path, index=False)
+    print(f"Saved to {path}")
+
+
+
+
+
+
+
+
 import os
 import pandas as pd
 from PyPDF2 import PdfReader
